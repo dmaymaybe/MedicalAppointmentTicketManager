@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="MedicalAppointmentTicketManager/MedicalAppointmentTicketManager.vcxproj" Id="04cfb3fe-e1f6-47e9-96cc-69409c3cf9cf" />
+</Solution>
