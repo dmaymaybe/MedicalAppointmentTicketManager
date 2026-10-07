@@ -146,12 +146,14 @@
     </Manifest>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\Database.cpp" />
     <ClCompile Include="src\Doctor.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\Patient.cpp" />
     <ClCompile Include="src\Ticket.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\Database.h" />
     <ClInclude Include="include\Doctor.h" />
     <ClInclude Include="include\Patient.h" />
     <ClInclude Include="include\Ticket.h" />
