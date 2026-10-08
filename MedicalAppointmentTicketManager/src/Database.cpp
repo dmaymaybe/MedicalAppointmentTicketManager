@@ -9,7 +9,7 @@ Database::Database(const std::string& path) : db_(path, SQLite::OPEN_READWRITE |
 
 
 // Получение списка всех врачей
-std::vector<Doctor> Database::listDoctors() {
+std::vector<Doctor> Database::listDoctors() const {
     SQLite::Statement q(db_, "SELECT id, fio, speciality, office FROM doctors ORDER BY fio");
     std::vector<Doctor> result;
     while (q.executeStep()) {
@@ -27,7 +27,7 @@ std::vector<Doctor> Database::listDoctors() {
 
 
 // Поиск врача по ID
-std::optional<Doctor> Database::findDoctorById(int id) {
+std::optional<Doctor> Database::findDoctorById(int id) const {
     SQLite::Statement q(db_, "SELECT id, fio, speciality, office FROM doctors WHERE id = ?");
     q.bind(1, id);
     if (q.executeStep()) {
@@ -59,7 +59,7 @@ int Database::addDoctor(const Doctor& d) {
 
 
 // Удаление врача
-void Database::removeDoctor(int id) {
+void Database::removeDoctor(int id) const {
     SQLite::Statement q(db_, "DELETE FROM doctors WHERE id = ?");
     q.bind(1, id);
     q.exec();
@@ -68,7 +68,7 @@ void Database::removeDoctor(int id) {
 
 
 // Проверка занятости врача
-bool Database::hasActiveTickets(int doctor_id) {
+bool Database::hasActiveTickets(int doctor_id) const {
     SQLite::Statement q(db_, "SELECT 1 FROM tickets WHERE doctor_id = ?");
     q.bind(1, doctor_id);
 
@@ -89,7 +89,7 @@ int Database::addPatient(const Patient& p) {
 
 
 // Поиск пациента по телефону
-std::optional<Patient> Database::findPatientByPhone(const std::string& phone) {
+std::optional<Patient> Database::findPatientByPhone(const std::string& phone) const {
     SQLite::Statement q(db_, "SELECT id, fio, phone FROM patients WHERE phone = ?");
     q.bind(1, phone);
     if (q.executeStep()) {
@@ -105,7 +105,7 @@ std::optional<Patient> Database::findPatientByPhone(const std::string& phone) {
 
 
 // Поиск пациента по ID
-std::optional<Patient> Database::findPatientById(int id) {
+std::optional<Patient> Database::findPatientById(int id) const {
     SQLite::Statement q(db_, "SELECT id, fio, phone FROM patients WHERE id = ?");
     q.bind(1, id);
     if (q.executeStep()) {
@@ -121,7 +121,7 @@ std::optional<Patient> Database::findPatientById(int id) {
 
 
 // Получение списка всех пациентов
-std::vector<Patient> Database::listPatients() {
+std::vector<Patient> Database::listPatients() const {
     SQLite::Statement q(db_, "SELECT id, fio, phone FROM patients ORDER BY fio");
     std::vector<Patient> result;
     while (q.executeStep()) {
@@ -214,7 +214,7 @@ std::optional<Ticket> Database::findTicketById(int id) {
 
 
 // Проверка повторной записи
-bool Database::hasTicketWithDoctorOnDate(int patient_id, int doctor_id, const std::string& date) {
+bool Database::hasTicketWithDoctorOnDate(int patient_id, int doctor_id, const std::string& date) const {
     SQLite::Statement q(db_, "SELECT 1 FROM tickets WHERE patient_id = ? AND doctor_id = ? AND date = ?");
     q.bind(1, patient_id);
     q.bind(2, doctor_id);
@@ -268,7 +268,7 @@ std::vector<Ticket> Database::findFreeSlotsByDoctor(int doctor_id) {
 
 
 // Получение списка истории обращений
-std::vector<HistoryRecord> Database::listHistory() {
+std::vector<HistoryRecord> Database::listHistory() const {
     SQLite::Statement q(db_, "SELECT id, ticket_id, patient_id, action_time, action_type FROM history ORDER BY action_time, id");
     std::vector<HistoryRecord> result;
     while (q.executeStep()) {
@@ -286,7 +286,7 @@ std::vector<HistoryRecord> Database::listHistory() {
 
 
 // Логирование действий
-void Database::logHistory(int ticket_id, int patient_id, const std::string& action) {
+void Database::logHistory(int ticket_id, int patient_id, const std::string& action) const {
     SQLite::Statement q(db_, "INSERT INTO history (ticket_id, patient_id, action_time, action_type) VALUES (?, ?, datetime('now', 'localtime'), ?)");
     q.bind(1, ticket_id);
     q.bind(2, patient_id);
