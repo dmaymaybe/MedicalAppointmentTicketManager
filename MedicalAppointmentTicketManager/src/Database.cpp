@@ -1,6 +1,14 @@
 #include "Database.h"
 
 
+
+Database::Database(const std::string& path) : db_(path, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE) {
+	initSchema();
+}
+
+
+
+// Получение списка всех врачей
 std::vector<Doctor> Database::listDoctors() {
     SQLite::Statement q(db_, "SELECT id, fio, speciality, office FROM doctors ORDER BY fio");
     std::vector<Doctor> result;
@@ -18,6 +26,7 @@ std::vector<Doctor> Database::listDoctors() {
 
 
 
+// Поиск врача по ID
 std::optional<Doctor> Database::findDoctorById(int id) {
     SQLite::Statement q(db_, "SELECT id, fio, speciality, office FROM doctors WHERE id = ?");
     q.bind(1, id);
@@ -34,12 +43,7 @@ std::optional<Doctor> Database::findDoctorById(int id) {
 
 
 
-Database::Database(const std::string& path) : db_(path, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE) {
-	initSchema();
-}
-
-
-
+// Добавление нового врача
 int Database::addDoctor(const Doctor& d) {
 	SQLite::Statement q(db_, "INSERT INTO doctors (fio, speciality, office) VALUES (?, ?, ?)");
 
@@ -54,6 +58,7 @@ int Database::addDoctor(const Doctor& d) {
 
 
 
+// Удаление врача
 void Database::removeDoctor(int id) {
     SQLite::Statement q(db_, "DELETE FROM doctors WHERE id = ?");
     q.bind(1, id);
@@ -62,6 +67,7 @@ void Database::removeDoctor(int id) {
 
 
 
+// Проверка занятости врача
 bool Database::hasActiveTickets(int doctor_id) {
     SQLite::Statement q(db_, "SELECT 1 FROM tickets WHERE doctor_id = ?");
     q.bind(1, doctor_id);
@@ -71,6 +77,7 @@ bool Database::hasActiveTickets(int doctor_id) {
 
 
 
+// Добавление нового пациента
 int Database::addPatient(const Patient& p) {
     SQLite::Statement q(db_, "INSERT INTO patients (fio, phone) VALUES (?, ?)");
     q.bind(1, p.getFio());
@@ -81,6 +88,7 @@ int Database::addPatient(const Patient& p) {
 
 
 
+// Поиск пациента по телефону
 std::optional<Patient> Database::findPatientByPhone(const std::string& phone) {
     SQLite::Statement q(db_, "SELECT id, fio, phone FROM patients WHERE phone = ?");
     q.bind(1, phone);
@@ -96,6 +104,7 @@ std::optional<Patient> Database::findPatientByPhone(const std::string& phone) {
 
 
 
+// Поиск свободных талонов
 std::vector<Ticket> Database::findFreeSlots(int doctor_id, const std::string& date) {
     SQLite::Statement q(db_, "SELECT id, doctor_id, date, time, patient_id FROM tickets WHERE doctor_id = ? AND date = ? AND patient_id IS NULL ORDER BY time");
     q.bind(1, doctor_id);
@@ -120,6 +129,7 @@ std::vector<Ticket> Database::findFreeSlots(int doctor_id, const std::string& da
 
 
 
+// Бронирование приема
 bool Database::bookSlot(int ticket_id, int patient_id) {
     SQLite::Transaction transaction(db_);
 
@@ -137,6 +147,7 @@ bool Database::bookSlot(int ticket_id, int patient_id) {
 
 
 
+// Отмена брони
 bool Database::cancelBooking(int ticket_id, int patient_id) {
     SQLite::Transaction transaction(db_);
 
@@ -154,6 +165,7 @@ bool Database::cancelBooking(int ticket_id, int patient_id) {
 
 
 
+// Список записей пациента
 std::vector<Ticket> Database::listPatientTickets(int patient_id) {
     SQLite::Statement q(db_, "SELECT id, doctor_id, date, time, patient_id FROM tickets WHERE patient_id = ? ORDER BY date, time");
     q.bind(1, patient_id);
@@ -178,6 +190,7 @@ std::vector<Ticket> Database::listPatientTickets(int patient_id) {
 
 
 
+// Поиск талона по ID
 std::optional<Ticket> Database::findTicketById(int id) {
     SQLite::Statement q(db_, "SELECT id, doctor_id, date, time, patient_id FROM tickets WHERE id = ?");
     q.bind(1, id);
@@ -200,6 +213,7 @@ std::optional<Ticket> Database::findTicketById(int id) {
 
 
 
+// Проверка повторной записи
 bool Database::hasTicketWithDoctorOnDate(int patient_id, int doctor_id, const std::string& date) {
     SQLite::Statement q(db_, "SELECT 1 FROM tickets WHERE patient_id = ? AND doctor_id = ? AND date = ?");
     q.bind(1, patient_id);
@@ -211,6 +225,7 @@ bool Database::hasTicketWithDoctorOnDate(int patient_id, int doctor_id, const st
 
 
 
+// Создание нового талона
 int Database::addTicket(const Ticket& t) {
     SQLite::Statement q(db_, "INSERT INTO tickets (doctor_id, date, time) VALUES (?, ?, ?)");
     q.bind(1, t.getDoctorId());
@@ -223,6 +238,7 @@ int Database::addTicket(const Ticket& t) {
 
 
 
+// Логирование действий
 void Database::logHistory(int ticket_id, int patient_id, const std::string& action) {
     SQLite::Statement q(db_, "INSERT INTO history (ticket_id, patient_id, action_time, action_type) VALUES (?, ?, datetime('now', 'localtime'), ?)");
     q.bind(1, ticket_id);
@@ -233,6 +249,7 @@ void Database::logHistory(int ticket_id, int patient_id, const std::string& acti
 
 
 
+// Инициализация схемы БД
 void Database::initSchema() {
         db_.exec("PRAGMA foreign_keys = ON");
 

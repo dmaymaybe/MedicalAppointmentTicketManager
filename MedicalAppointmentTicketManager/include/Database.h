@@ -16,11 +16,11 @@ public:
 	
 	std::vector<Doctor> listDoctors();
 	std::optional<Doctor> findDoctorById(int id);
-	int addDoctor(const Doctor& d);              // возвращает новый id
+	int addDoctor(const Doctor& d);              // Возвращает новый id
 	void removeDoctor(int id);
 	bool hasActiveTickets(int doctor_id);
 
-	int addPatient(const Patient& p);             // возвращает новый id
+	int addPatient(const Patient& p);             // Возвращает новый id
 	std::optional<Patient> findPatientByPhone(const std::string& phone);
 
 	std::vector<Ticket> findFreeSlots(int doctor_id, const std::string& date);
