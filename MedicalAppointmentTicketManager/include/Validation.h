@@ -9,6 +9,6 @@ public:
 	bool isValidPhone(const std::string& phone) const;
 	bool isValidDate(const std::string& date) const;
 	bool isValidTime(const std::string& time) const;
-	bool isValidOffice(unsigned int office) const;
+	bool isValidOffice(int office) const;
 };
 

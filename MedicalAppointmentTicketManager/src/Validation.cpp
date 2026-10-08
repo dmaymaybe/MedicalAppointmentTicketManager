@@ -2,6 +2,7 @@
 #include <chrono>
 #include <sstream>
 #include <algorithm>
+#include <cctype>
 
 
 
@@ -77,6 +78,14 @@ bool Validation::isValidDate(const std::string& date) const {
 		return false;
 	}
 
+    // Все позиции, кроме '-', должны быть цифрами
+    for (size_t i = 0; i < date.size(); ++i) {
+        if (i == 4 || i == 7) continue;
+        if (!std::isdigit(static_cast<unsigned char>(date[i]))) {
+            return false;
+        }
+    }
+
 	// Извлечение чисел
 	int year, month, day;
 	char dash1, dash2;
@@ -93,8 +102,9 @@ bool Validation::isValidDate(const std::string& date) const {
 	}
 
 	// Проверка "не раньше сегодняшней" даты
-	auto now = std::chrono::system_clock::now();
-	std::chrono::year_month_day today{ std::chrono::floor<std::chrono::days>(now) };
+    auto now = std::chrono::system_clock::now();
+    auto local = std::chrono::current_zone()->to_local(now);
+    std::chrono::year_month_day today{std::chrono::floor<std::chrono::days>(local)};
 
 	return parsed_date >= today;
 }
@@ -108,17 +118,17 @@ bool Validation::isValidTime(const std::string& time) const {
         return false;
     }
 
-    // Извлечение чисел
-    int hours, minutes;
-    char colon;
-    std::stringstream ss(time);
-
-    if (!(ss >> hours >> colon >> minutes)) {
-        return false;
+    // Все позиции, кроме ':', должны быть цифрами
+    for (size_t i = 0; i < time.size(); ++i) {
+        if (i == 2) continue;
+        if (!std::isdigit(static_cast<unsigned char>(time[i]))) {
+            return false;
+        }
     }
 
-    // Проверка существования времени
-    if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+    // Разрешены только минуты 00 или 30
+    if (time.compare(3, 2, "00") != 0 &&
+        time.compare(3, 2, "30") != 0) {
         return false;
     }
 
@@ -129,7 +139,7 @@ bool Validation::isValidTime(const std::string& time) const {
 
 
 // Проверка валидности кабинета
-bool Validation::isValidOffice(unsigned int office) const {
+bool Validation::isValidOffice(int office) const {
     // Целое положительное число
     return office > 0;
 }
