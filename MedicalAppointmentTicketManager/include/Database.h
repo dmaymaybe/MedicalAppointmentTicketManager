@@ -9,6 +9,18 @@
 
 
 
+// Запись из таблицы истории обращений
+struct HistoryRecord
+{
+	int id;
+	int ticket_id;
+	int patient_id;
+	std::string action_time;
+	std::string action_type;
+};
+
+
+
 class Database
 {
 public:
@@ -22,6 +34,8 @@ public:
 
 	int addPatient(const Patient& p);             // Возвращает новый id
 	std::optional<Patient> findPatientByPhone(const std::string& phone);
+	std::optional<Patient> findPatientById(int id);
+	std::vector<Patient> listPatients();
 
 	std::vector<Ticket> findFreeSlots(int doctor_id, const std::string& date);
 	bool bookSlot(int ticket_id, int patient_id);
@@ -30,11 +44,15 @@ public:
 	std::optional<Ticket> findTicketById(int id);
 	bool hasTicketWithDoctorOnDate(int patient_id, int doctor_id, const std::string& date);
 	int addTicket(const Ticket& t);
+	std::vector<Ticket> listAllTickets();
+	std::vector<Ticket> findFreeSlotsByDoctor(int doctor_id);
 
+	std::vector<HistoryRecord> listHistory();
 	void logHistory(int ticket_id, int patient_id, const std::string& action);
 
 private:
 	SQLite::Database db_;
 	void initSchema();
+	Ticket ticketFromRow(SQLite::Statement& q);
 };
 

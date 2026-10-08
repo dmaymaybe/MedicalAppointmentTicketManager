@@ -150,6 +150,7 @@
     <ClCompile Include="src\Doctor.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\Patient.cpp" />
+    <ClCompile Include="src\Service.cpp" />
     <ClCompile Include="src\Ticket.cpp" />
     <ClCompile Include="src\Validation.cpp" />
   </ItemGroup>
@@ -157,6 +158,7 @@
     <ClInclude Include="include\Database.h" />
     <ClInclude Include="include\Doctor.h" />
     <ClInclude Include="include\Patient.h" />
+    <ClInclude Include="include\Service.h" />
     <ClInclude Include="include\Ticket.h" />
     <ClInclude Include="include\Validation.h" />
   </ItemGroup>

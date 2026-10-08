@@ -10,5 +10,9 @@ public:
 	bool isValidDate(const std::string& date) const;
 	bool isValidTime(const std::string& time) const;
 	bool isValidOffice(int office) const;
+	bool isSlotInPast(const std::string& date, const std::string& time) const;
+private:
+	std::string todayStr() const;
+	std::string nowTimeStr() const;
 };
 

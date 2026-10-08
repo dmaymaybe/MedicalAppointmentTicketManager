@@ -1,4 +1,5 @@
 #include "Validation.h"
+#include <iomanip>
 #include <chrono>
 #include <sstream>
 #include <algorithm>
@@ -73,10 +74,10 @@ bool Validation::isValidPhone(const std::string& phone) const {
 
 // Проверка валидности даты
 bool Validation::isValidDate(const std::string& date) const {
-	// Проверка структуры строки
-	if (date.length() != 10 || date[4] != '-' || date[7] != '-') {
-		return false;
-	}
+    // Проверка структуры строки
+    if (date.length() != 10 || date[4] != '-' || date[7] != '-') {
+        return false;
+    }
 
     // Все позиции, кроме '-', должны быть цифрами
     for (size_t i = 0; i < date.size(); ++i) {
@@ -86,27 +87,23 @@ bool Validation::isValidDate(const std::string& date) const {
         }
     }
 
-	// Извлечение чисел
-	int year, month, day;
-	char dash1, dash2;
-	std::stringstream ss(date);
+    // Извлечение чисел
+    int year, month, day;
+    char dash1, dash2;
+    std::stringstream ss(date);
 
-	if (!(ss >> year >> dash1 >> month >> dash2 >> day)) {
-		return false;
-	}
+    if (!(ss >> year >> dash1 >> month >> dash2 >> day)) {
+        return false;
+    }
 
-	// Проверка существования даты в календаре включая високосные годы
-	std::chrono::year_month_day parsed_date{ std::chrono::year{year} / month / day };
-	if (!parsed_date.ok()) {
-		return false;
-	}
+    // Проверка существования даты в календаре включая високосные годы
+    std::chrono::year_month_day parsed_date{ std::chrono::year{year} / month / day };
+    if (!parsed_date.ok()) {
+        return false;
+    }
 
-	// Проверка "не раньше сегодняшней" даты
-    auto now = std::chrono::system_clock::now();
-    auto local = std::chrono::current_zone()->to_local(now);
-    std::chrono::year_month_day today{std::chrono::floor<std::chrono::days>(local)};
-
-	return parsed_date >= today;
+    // Проверка "не раньше сегодняшней" даты
+    return date >= todayStr();
 }
 
 
@@ -142,4 +139,50 @@ bool Validation::isValidTime(const std::string& time) const {
 bool Validation::isValidOffice(int office) const {
     // Целое положительное число
     return office > 0;
+}
+
+
+
+// Проверка, что дата и время уже в прошлом
+bool Validation::isSlotInPast(const std::string& date, const std::string& time) const {
+    std::string today = todayStr();
+
+    // Разные дни - сравнение по строке yyyy-mm-dd
+    if (date < today) return true;
+    if (date > today) return false;
+
+    // Один день — сравниваем время
+    return time <= nowTimeStr();
+}
+
+
+
+// Текущая дата в формате yyyy-mm-dd (локальное время)
+std::string Validation::todayStr() const {
+    auto now = std::chrono::system_clock::now();
+    auto local = std::chrono::current_zone()->to_local(now);
+    std::chrono::year_month_day today{ std::chrono::floor<std::chrono::days>(local) };
+
+    std::ostringstream oss;
+    oss << std::setw(4) << std::setfill('0') << static_cast<int>(today.year()) << '-'
+        << std::setw(2) << std::setfill('0') << static_cast<unsigned>(today.month()) << '-'
+        << std::setw(2) << std::setfill('0') << static_cast<unsigned>(today.day());
+    return oss.str();
+}
+
+
+
+// Текущее время в формате hh:mm (локальное время)
+std::string Validation::nowTimeStr() const {
+    auto now = std::chrono::system_clock::now();
+    auto local = std::chrono::current_zone()->to_local(now);
+
+    auto timeOfDay = std::chrono::hh_mm_ss{
+        local - std::chrono::floor<std::chrono::days>(local)
+    };
+
+    std::ostringstream oss;
+    oss << std::setw(2) << std::setfill('0') << timeOfDay.hours().count() << ':'
+        << std::setw(2) << std::setfill('0') << timeOfDay.minutes().count();
+    return oss.str();
 }

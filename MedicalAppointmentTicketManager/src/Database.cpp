@@ -104,25 +104,47 @@ std::optional<Patient> Database::findPatientByPhone(const std::string& phone) {
 
 
 
+// Поиск пациента по ID
+std::optional<Patient> Database::findPatientById(int id) {
+    SQLite::Statement q(db_, "SELECT id, fio, phone FROM patients WHERE id = ?");
+    q.bind(1, id);
+    if (q.executeStep()) {
+        return Patient(
+            q.getColumn("fio").getString(),
+            q.getColumn("phone").getString(),
+            q.getColumn("id").getInt()
+        );
+    }
+    return std::nullopt;
+}
+
+
+
+// Получение списка всех пациентов
+std::vector<Patient> Database::listPatients() {
+    SQLite::Statement q(db_, "SELECT id, fio, phone FROM patients ORDER BY fio");
+    std::vector<Patient> result;
+    while (q.executeStep()) {
+        result.emplace_back(
+            q.getColumn("fio").getString(),
+            q.getColumn("phone").getString(),
+            q.getColumn("id").getInt()
+        );
+    }
+    return result;
+}
+
+
+
 // Поиск свободных талонов
 std::vector<Ticket> Database::findFreeSlots(int doctor_id, const std::string& date) {
     SQLite::Statement q(db_, "SELECT id, doctor_id, date, time, patient_id FROM tickets WHERE doctor_id = ? AND date = ? AND patient_id IS NULL ORDER BY time");
     q.bind(1, doctor_id);
     q.bind(2, date);
+
     std::vector<Ticket> result;
     while (q.executeStep()) {
-        std::optional<int> patientId;
-        if (!q.getColumn("patient_id").isNull()) {
-            patientId = q.getColumn("patient_id").getInt();
-        }
-        Ticket t(
-            q.getColumn("doctor_id").getInt(),
-            q.getColumn("date").getString(),
-            q.getColumn("time").getString(),
-            patientId,
-            q.getColumn("id").getInt()
-        );
-        result.push_back(t);
+        result.push_back(ticketFromRow(q));
     }
     return result;
 }
@@ -172,22 +194,10 @@ std::vector<Ticket> Database::listPatientTickets(int patient_id) {
 
     std::vector<Ticket> result;
     while (q.executeStep()) {
-        std::optional<int> patientId;
-        if (!q.getColumn("patient_id").isNull()) {
-            patientId = q.getColumn("patient_id").getInt();
-        }
-        Ticket t(
-            q.getColumn("doctor_id").getInt(),
-            q.getColumn("date").getString(),
-            q.getColumn("time").getString(),
-            patientId,
-            q.getColumn("id").getInt()
-        );
-        result.push_back(t);
+        result.push_back(ticketFromRow(q));
     }
     return result;
 }
-
 
 
 // Поиск талона по ID
@@ -196,17 +206,7 @@ std::optional<Ticket> Database::findTicketById(int id) {
     q.bind(1, id);
 
     if (q.executeStep()) {
-        std::optional<int> patientId;
-        if (!q.getColumn("patient_id").isNull()) {
-            patientId = q.getColumn("patient_id").getInt();
-        }
-        return Ticket(
-            q.getColumn("doctor_id").getInt(),
-            q.getColumn("date").getString(),
-            q.getColumn("time").getString(),
-            patientId,
-            q.getColumn("id").getInt()
-        );
+        return ticketFromRow(q);
     }
     return std::nullopt;
 }
@@ -234,6 +234,53 @@ int Database::addTicket(const Ticket& t) {
     q.exec();
 
     return static_cast<int>(db_.getLastInsertRowid());
+}
+
+
+
+// Получение списка всех талонов
+std::vector<Ticket> Database::listAllTickets() {
+    SQLite::Statement q(db_, "SELECT id, doctor_id, date, time, patient_id FROM tickets ORDER BY date, time");
+    std::vector<Ticket> result;
+    while (q.executeStep()) {
+        result.push_back(ticketFromRow(q));
+    }
+    return result;
+}
+
+
+
+// Все свободные талоны врача, начиная с текущей даты
+std::vector<Ticket> Database::findFreeSlotsByDoctor(int doctor_id) {
+    SQLite::Statement q(db_,
+        "SELECT id, doctor_id, date, time, patient_id FROM tickets "
+        "WHERE doctor_id = ? AND patient_id IS NULL AND date >= date('now','localtime') "
+        "ORDER BY date, time");
+    q.bind(1, doctor_id);
+
+    std::vector<Ticket> result;
+    while (q.executeStep()) {
+        result.push_back(ticketFromRow(q));
+    }
+    return result;
+}
+
+
+
+// Получение списка истории обращений
+std::vector<HistoryRecord> Database::listHistory() {
+    SQLite::Statement q(db_, "SELECT id, ticket_id, patient_id, action_time, action_type FROM history ORDER BY action_time, id");
+    std::vector<HistoryRecord> result;
+    while (q.executeStep()) {
+        HistoryRecord r;
+        r.id = q.getColumn("id").getInt();
+        r.ticket_id = q.getColumn("ticket_id").getInt();
+        r.patient_id = q.getColumn("patient_id").getInt();
+        r.action_time = q.getColumn("action_time").getString();
+        r.action_type = q.getColumn("action_type").getString();
+        result.push_back(r);
+    }
+    return result;
 }
 
 
@@ -298,3 +345,18 @@ void Database::initSchema() {
 }
 
 
+
+// Сборка объекта Ticket из текущей строки выборки
+Ticket Database::ticketFromRow(SQLite::Statement& q) {
+    std::optional<int> patientId;
+    if (!q.getColumn("patient_id").isNull()) {
+        patientId = q.getColumn("patient_id").getInt();
+    }
+    return Ticket(
+        q.getColumn("doctor_id").getInt(),
+        q.getColumn("date").getString(),
+        q.getColumn("time").getString(),
+        patientId,
+        q.getColumn("id").getInt()
+    );
+}
