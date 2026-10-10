@@ -95,7 +95,7 @@ RegisterPatientResult Service::registerPatient(const std::string& fio, const std
 		return RegisterPatientResult::InvalidPhone;
 
 	try {
-		// Проверка, что телефон ещё не занят
+		// Проверка, что телефон еще не занят
 		if (db.findPatientByPhone(phone))
 			return RegisterPatientResult::PhoneTaken;
 
@@ -153,7 +153,7 @@ CreateTicketResult Service::createTicket(const std::string& doctor_id, const std
 	if (!idOpt)
 		return CreateTicketResult::DoctorNotFound;
 
-	// Сначала дешёвые проверки формата — они дают более понятное сообщение
+	// Сначала дешевые проверки формата — они дают более понятное сообщение
 	if (!validation.isValidDate(date))
 		return CreateTicketResult::InvalidDate;
 
@@ -192,7 +192,7 @@ CreateTicketResult Service::createTicket(const std::string& doctor_id, const std
 FreeSlotsResponse Service::getFreeSlots(const std::string& speciality, const std::string& doctor_fio, const std::string& date) const {
 	FreeSlotsResponse resp;
 
-	// Если дата задана, проверяем её формат
+	// Если дата задана, проверяем ее формат
 	if (!date.empty() && !validation.isValidDate(date)) {
 		resp.status = FreeSlotsResult::InvalidDate;
 		return resp;
@@ -202,7 +202,7 @@ FreeSlotsResponse Service::getFreeSlots(const std::string& speciality, const std
 		auto doctors = db.listDoctors();
 
 		for (const auto& doc : doctors) {
-			// Сравнение точное, с учётом регистра: "терапевт" не найдёт "Терапевт". В меню нужно показать пользователю список специальностей или явно требовать точного написания
+			// Сравнение точное, с учетом регистра: "терапевт" не найдет "Терапевт". В меню нужно показать пользователю список специальностей или явно требовать точного написания
 			// Фильтр по специальности
 			if (!speciality.empty() && doc.getSpeciality() != speciality)
 				continue;
@@ -216,7 +216,7 @@ FreeSlotsResponse Service::getFreeSlots(const std::string& speciality, const std
 				// Фильтр по дате
 				if (!date.empty() && t.getDate() != date)
 					continue;
-				// Слот уже прошёл — не показываем
+				// Слот уже прошел — не показываем
 				if (validation.isSlotInPast(t.getDate(), t.getTime()))
 					continue;
 				resp.tickets.push_back(t);
@@ -313,7 +313,7 @@ BookResult Service::book(const std::string& ticket_id, int patient_id) {
 		if (!db.findPatientById(patient_id))
 			return BookResult::PatientNotFound;
 
-		// Проверка, что пациент ещё не записан к этому врачу в этот день
+		// Проверка, что пациент еще не записан к этому врачу в этот день
 		if (db.hasTicketWithDoctorOnDate(patient_id, ticket->getDoctorId(), ticket->getDate()))
 			return BookResult::AlreadyBookedWithDoctorOnDate;
 
