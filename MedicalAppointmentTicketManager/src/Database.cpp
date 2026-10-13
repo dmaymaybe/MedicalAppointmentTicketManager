@@ -2,6 +2,13 @@
 
 
 
+// Проверка записан ли пациент на талон
+bool TicketView::isFree() const {
+    return !patientId.has_value();
+}
+
+
+
 Database::Database(const std::string& path) : db_(path, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE) {
 	initSchema();
 }
@@ -58,8 +65,7 @@ int Database::addDoctor(const Doctor& d) {
 
 
 
-// Удаление врача.
-// Не const: физически удаляет строку из таблицы doctors.
+// Удаление врача
 void Database::removeDoctor(int id) {
     SQLite::Statement q(db_, "DELETE FROM doctors WHERE id = ?");
     q.bind(1, id);
@@ -215,7 +221,7 @@ std::vector<TicketView> Database::listPatientTickets(int patient_id) const {
 }
 
 
-// Поиск талона по ID (для бизнес-логики book/cancel - обычный Ticket, без JOIN)
+// Поиск талона по ID (для бизнес-логики book/cancel)
 std::optional<Ticket> Database::findTicketById(int id) const {
     SQLite::Statement q(db_, "SELECT id, doctor_id, date, time, patient_id FROM tickets WHERE id = ?");
     q.bind(1, id);

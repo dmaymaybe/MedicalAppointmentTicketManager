@@ -34,7 +34,7 @@ struct TicketView
 	std::optional<int> patientId;
 	std::optional<std::string> patientFio; // nullopt - талон свободен
 
-	bool isFree() const { return !patientId.has_value(); }
+	bool isFree() const;
 };
 
 

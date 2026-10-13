@@ -60,8 +60,12 @@ std::string utf8PadRight(const std::string& s, size_t targetWidth) {
 // Выводит таблицу с выравниванием столбцов
 void printTable(const std::vector<std::string>& headers,
     const std::vector<std::vector<std::string>>& rows) {
+
+    // Ширина колонки берется сначала по длине заголовка
     size_t cols = headers.size();
     std::vector<size_t> widths(cols);
+
+    // Расширяем ширину колонки, если в данных есть значение длиннее заголовка
     for (size_t c = 0; c < cols; ++c)
         widths[c] = utf8DisplayWidth(headers[c]);
 
@@ -69,12 +73,14 @@ void printTable(const std::vector<std::string>& headers,
         for (size_t c = 0; c < cols && c < row.size(); ++c)
             widths[c] = std::max(widths[c], utf8DisplayWidth(row[c]));
 
+    // Печать разделительной линии
     auto separator = [&]() {
         for (size_t c = 0; c < cols; ++c)
             std::cout << "+" << std::string(widths[c] + 2, '-');
         std::cout << "+\n";
         };
 
+    // Печать одной строки таблицы с выравниванием по ширине колонок
     auto printRow = [&](const std::vector<std::string>& row) {
         std::cout << "|";
         for (size_t c = 0; c < cols; ++c) {
@@ -84,15 +90,16 @@ void printTable(const std::vector<std::string>& headers,
         std::cout << "\n";
         };
 
+    // Печать таблицы
     separator();
-    printRow(headers);
+    printRow(headers); // строка заголовков
     separator();
     if (rows.empty()) {
-        std::cout << "| (нет данных)\n";
+        std::cout << "| (нет данных)\n"; // пустой список
     }
     else {
         for (const auto& row : rows)
-            printRow(row);
+            printRow(row); // печать каждой строки данных
     }
     separator();
 }

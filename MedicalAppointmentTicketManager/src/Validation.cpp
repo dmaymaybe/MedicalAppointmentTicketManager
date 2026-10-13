@@ -16,25 +16,22 @@ bool Validation::isValidFio(const std::string& fio) const {
     bool hasLetter = false; // хотя бы одна буква
 
     for (size_t i = 0; i < fio.size(); ) {
-        unsigned char b = static_cast<unsigned char>(fio[i]);
+        unsigned char b = static_cast<unsigned char>(fio[i]); // байт
         unsigned int cp; // код символа в Юникоде
 
-        if (b < 0x80) { 
-            // Значение байта меньше 128 = английский символ, цифра, пробел или точка
+        if (b < 0x80) { // Значение байта меньше 128 = английский символ, цифра, пробел или точка
             cp = b;
             i += 1;
         }
-        else if (b >= 0xC2 && b <= 0xDF) {
-            // Два байта: нужна вторая часть вида 10xxxxxx
+        else if (b >= 0xC2 && b <= 0xDF) { // Два байта - кириллица 
             if (i + 1 >= fio.size()) return false;
             unsigned char b2 = static_cast<unsigned char>(fio[i + 1]);
-            if ((b2 & 0xC0) != 0x80) return false;
+            if ((b2 & 0xC0) != 0x80) return false; // нужна вторая часть вида 10xxxxxx, иначе строка — битый UTF-8
 
-            cp = ((b & 0x1F) << 6) | (b2 & 0x3F);
+            cp = ((b & 0x1F) << 6) | (b2 & 0x3F); // декодирование UTF-8 в код символа Юникода
             i += 2;
         }
-        else {
-            // три и четыре байта = русских букв, пробела и точки среди них нет
+        else { // три и четыре байта = русских букв, пробела и точки среди них тоже нет
             return false;
         }
 

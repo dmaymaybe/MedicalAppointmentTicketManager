@@ -11,7 +11,7 @@
 std::optional<int> Service::parseInt(const std::string& s) const {
 	try {
 		size_t pos = 0;
-		int val = std::stoi(s, &pos);
+		int val = std::stoi(s, &pos); // Преобразуем строку в int, pos — индекс первого символа после числа
 		if (pos != s.size()) return std::nullopt;
 		return val;
 	}
@@ -182,7 +182,7 @@ CreateTicketResult Service::createTicket(const std::string& doctor_id, const std
 	}
 	catch (const SQLite::Exception& e) {
 		// Нарушение уникальности "врач + дата + время"
-		if (e.getErrorCode() == SQLITE_CONSTRAINT)
+		if (e.getErrorCode() == SQLITE_CONSTRAINT) // Нарушение ограничения
 			return CreateTicketResult::Duplicate;
 		return CreateTicketResult::DatabaseError;
 	}
