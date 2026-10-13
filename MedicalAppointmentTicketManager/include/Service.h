@@ -101,7 +101,7 @@ struct LoginPatientResponse
 struct FreeSlotsResponse
 {
 	FreeSlotsResult status = FreeSlotsResult::DatabaseError;
-	std::vector<Ticket> tickets;       // Найденные талоны
+	std::vector<TicketView> tickets;
 };
 
 
@@ -122,8 +122,8 @@ public:
 	CreateTicketResult createTicket(const std::string& doctor_id, const std::string& date, const std::string& time);
 	FreeSlotsResponse getFreeSlots(const std::string& speciality, const std::string& doctor_fio, const std::string& date) const;
 	FreeSlotsResponse getFreeSlotsByDoctor(const std::string& doctor_id, const std::string& date) const;
-	std::vector<Ticket> getAllTickets();
-	std::vector<Ticket> getPatientTickets(int patient_id);
+	std::vector<TicketView> getAllTickets();
+	std::vector<TicketView> getPatientTickets(int patient_id);
 
 	BookResult book(const std::string& ticket_id, int patient_id);
 	CancelResult cancel(const std::string& ticket_id, int patient_id);
@@ -135,4 +135,3 @@ private:
 
 	std::optional<int> parseInt(const std::string& s) const;
 };
-

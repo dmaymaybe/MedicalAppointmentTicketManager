@@ -2,6 +2,8 @@
 #include <sqlite3.h>
 #include <chrono>
 #include <ctime>
+#include <tuple>
+#include <algorithm>
 
 
 
@@ -214,14 +216,19 @@ FreeSlotsResponse Service::getFreeSlots(const std::string& speciality, const std
 			auto slots = db.findFreeSlotsByDoctor(doc.getId());
 			for (const auto& t : slots) {
 				// Фильтр по дате
-				if (!date.empty() && t.getDate() != date)
+				if (!date.empty() && t.date != date)
 					continue;
 				// Слот уже прошел — не показываем
-				if (validation.isSlotInPast(t.getDate(), t.getTime()))
+				if (validation.isSlotInPast(t.date, t.time))
 					continue;
 				resp.tickets.push_back(t);
 			}
 		}
+
+		// После объединения талонов сортируем общий список по дате и времени
+		std::sort(resp.tickets.begin(), resp.tickets.end(), [](const TicketView& a, const TicketView& b) {
+			return std::tie(a.date, a.time) < std::tie(b.date, b.time);
+		});
 
 		resp.status = FreeSlotsResult::Ok;
 	}
@@ -259,7 +266,7 @@ FreeSlotsResponse Service::getFreeSlotsByDoctor(const std::string& doctor_id, co
 		// Читаем слоты и отсекаем прошедшие
 		auto slots = db.findFreeSlots(*idOpt, date);
 		for (const auto& t : slots) {
-			if (validation.isSlotInPast(t.getDate(), t.getTime()))
+			if (validation.isSlotInPast(t.date, t.time))
 				continue;
 			resp.tickets.push_back(t);
 		}
@@ -276,14 +283,14 @@ FreeSlotsResponse Service::getFreeSlotsByDoctor(const std::string& doctor_id, co
 
 
 // Получение списка всех талонов
-std::vector<Ticket> Service::getAllTickets() {
+std::vector<TicketView> Service::getAllTickets() {
 	return db.listAllTickets();
 }
 
 
 
 // Получение талонов пациента
-std::vector<Ticket> Service::getPatientTickets(int patient_id) {
+std::vector<TicketView> Service::getPatientTickets(int patient_id) {
 	return db.listPatientTickets(patient_id);
 }
 

@@ -12,12 +12,12 @@ bool Validation::isValidFio(const std::string& fio) const {
 
     const size_t MAX_LEN = 50;
 
-    size_t length = 0;        // длина в символах
-    bool hasLetter = false;   // хотя бы одна буква
+    size_t length = 0; // длина в символах
+    bool hasLetter = false; // хотя бы одна буква
 
     for (size_t i = 0; i < fio.size(); ) {
         unsigned char b = static_cast<unsigned char>(fio[i]);
-        unsigned int cp;      // код символа в Юникоде
+        unsigned int cp; // код символа в Юникоде
 
         if (b < 0x80) { 
             // Значение байта меньше 128 = английский символ, цифра, пробел или точка
@@ -38,9 +38,9 @@ bool Validation::isValidFio(const std::string& fio) const {
             return false;
         }
 
-        bool isLetter = (cp >= 0x0410 && cp <= 0x044F)   // А-Я, а-я
-            || cp == 0x0401                      // Ё
-            || cp == 0x0451;                     // ё
+        bool isLetter = (cp >= 0x0410 && cp <= 0x044F) // А-Я, а-я
+            || cp == 0x0401 // Ё
+            || cp == 0x0451; // ё
 
         if (isLetter) {
             hasLetter = true;
@@ -54,7 +54,7 @@ bool Validation::isValidFio(const std::string& fio) const {
         }
     }
 
-    return hasLetter;         // Пустая строка и строка из одних пробелов и точек не проходят
+    return hasLetter; // Пустая строка и строка из одних пробелов и точек не проходят
 }
 
 
