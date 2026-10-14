@@ -5,6 +5,8 @@
 #include <vector>
 #include <algorithm>
 #include <cctype>
+#include <optional>
+#include <cstdlib>
 #include <filesystem>
 #include <Windows.h>
 #include "Database.h"
@@ -165,6 +167,16 @@ void printFreeSlots(const std::vector<TicketView>& tickets) {
 }
 
 
+// Отбирает из общего списка талоны конкретного врача.
+std::vector<TicketView> ticketsByDoctor(const std::vector<TicketView>& tickets, int doctorId) {
+    std::vector<TicketView> result;
+    for (const auto& ticket : tickets) {
+        if (ticket.doctorId == doctorId) result.push_back(ticket);
+    }
+    return result;
+}
+
+
 
 // Преобразует строку в int или возвращает nullopt
 std::optional<int> safeStoi(const std::string& s) {
@@ -229,6 +241,41 @@ std::string readUntilValid(const std::string& prompt, Predicate isValid,
 }
 
 
+// Ввод поля с возможностью отменить текущую операцию нулём.
+std::optional<std::string> readCancellableLine(const std::string& prompt) {
+    std::string value = readLine(prompt + " (введите 0 для отмены): ");
+    if (value == "0") {
+        std::cout << "Операция отменена.\n";
+        return std::nullopt;
+    }
+    return value;
+}
+
+// Как readUntilValid, но пользователь может отменить ввод значением 0.
+template <typename Predicate>
+std::optional<std::string> readUntilValidOrCancel(
+    const std::string& prompt,
+    Predicate isValid,
+    const std::string& errorMsg = "Некорректное значение. Проверьте формат и повторите ввод.\n") {
+    while (true) {
+        auto value = readCancellableLine(prompt);
+        if (!value) return std::nullopt;
+        if (isValid(*value)) return value;
+        std::cout << errorMsg;
+    }
+}
+
+
+// Время записи допускается только с минутами 00 или 30.
+bool isValidAppointmentTime(const std::string& value) {
+    if (!validation.isValidTime(value) || value.size() != 5 || value[2] != ':') {
+        return false;
+    }
+    const std::string minutes = value.substr(3, 2);
+    return minutes == "00" || minutes == "30";
+}
+
+
 
 // Проверяет, есть ли врач с таким ID
 bool doctorIdExists(const std::vector<Doctor>& doctors, const std::string& idStr) {
@@ -250,92 +297,74 @@ bool ticketIdExistsInList(const std::vector<TicketView>& tickets, const std::str
 
 
 
-// Сообщения по результатам
-
-// Выводит результат добавления врача
+// Понятные сообщения по результатам операций.
 void printResult(AddDoctorResult r) {
     switch (r) {
     case AddDoctorResult::Ok: std::cout << "Врач успешно добавлен.\n"; break;
-    case AddDoctorResult::InvalidFio: std::cout << "Неверный формат ввода. Повторите ввод.\n"; break;
-    case AddDoctorResult::EmptySpeciality: std::cout << "Неверный формат ввода. Повторите ввод.\n"; break;
-    case AddDoctorResult::InvalidOffice: std::cout << "Неверный формат ввода. Повторите ввод.\n"; break;
-    case AddDoctorResult::DatabaseError: std::cout << "Ошибка базы данных. Попробуйте ещё раз.\n"; break;
+    case AddDoctorResult::InvalidFio: std::cout << "Ошибка: ФИО врача должно содержать корректные имя и фамилию.\n"; break;
+    case AddDoctorResult::EmptySpeciality: std::cout << "Ошибка: укажите специальность врача.\n"; break;
+    case AddDoctorResult::InvalidOffice: std::cout << "Ошибка: номер кабинета должен быть положительным числом.\n"; break;
+    case AddDoctorResult::DatabaseError: std::cout << "Не удалось добавить врача: ошибка базы данных.\n"; break;
     }
 }
 
-
-
-// Выводит результат удаления врача
 void printResult(RemoveDoctorResult r) {
     switch (r) {
     case RemoveDoctorResult::Ok: std::cout << "Врач успешно удалён.\n"; break;
-    case RemoveDoctorResult::DoctorNotFound: std::cout << "Неверный формат ввода. Повторите ввод.\n"; break;
-    case RemoveDoctorResult::HasTickets: std::cout << "Удаление невозможно: у врача есть талоны.\n"; break;
-    case RemoveDoctorResult::DatabaseError: std::cout << "Ошибка базы данных. Попробуйте ещё раз.\n"; break;
+    case RemoveDoctorResult::DoctorNotFound: std::cout << "Ошибка: врач с таким ID не найден.\n"; break;
+    case RemoveDoctorResult::HasTickets: std::cout << "Удаление невозможно: у врача есть талоны. Сначала удалите его талоны.\n"; break;
+    case RemoveDoctorResult::DatabaseError: std::cout << "Не удалось удалить врача: ошибка базы данных.\n"; break;
     }
 }
 
-
-
-// Выводит результат создания талона
 void printResult(CreateTicketResult r) {
     switch (r) {
     case CreateTicketResult::Ok: std::cout << "Талон успешно создан.\n"; break;
-    case CreateTicketResult::DoctorNotFound: std::cout << "Неверный формат ввода. Повторите ввод.\n"; break;
-    case CreateTicketResult::InvalidDate: std::cout << "Неверный формат ввода. Повторите ввод.\n"; break;
-    case CreateTicketResult::InvalidTime: std::cout << "Неверный формат ввода. Повторите ввод.\n"; break;
-    case CreateTicketResult::TicketInPast: std::cout << "Неверный формат ввода. Повторите ввод.\n"; break;
-    case CreateTicketResult::Duplicate: std::cout << "Талон на это время у данного врача уже существует.\n"; break;
-    case CreateTicketResult::DatabaseError: std::cout << "Ошибка базы данных. Попробуйте ещё раз.\n"; break;
+    case CreateTicketResult::DoctorNotFound: std::cout << "Ошибка: врач с таким ID не найден.\n"; break;
+    case CreateTicketResult::InvalidDate: std::cout << "Ошибка: дата должна быть в формате ГГГГ-ММ-ДД и существовать в календаре.\n"; break;
+    case CreateTicketResult::InvalidTime: std::cout << "Ошибка: время должно быть в формате ЧЧ:ММ, минуты — только 00 или 30 (например, 14:00 или 14:30).\n"; break;
+    case CreateTicketResult::TicketInPast: std::cout << "Ошибка: нельзя создать талон на прошедшие дату или время.\n"; break;
+    case CreateTicketResult::Duplicate: std::cout << "Ошибка: талон на это время у данного врача уже существует.\n"; break;
+    case CreateTicketResult::DatabaseError: std::cout << "Не удалось создать талон: ошибка базы данных.\n"; break;
     }
 }
 
-
-
-// Выводит результат регистрации пациента
 void printResult(RegisterPatientResult r) {
     switch (r) {
     case RegisterPatientResult::Ok: std::cout << "Пациент успешно зарегистрирован.\n"; break;
-    case RegisterPatientResult::InvalidFio: std::cout << "Неверный формат ввода. Повторите ввод.\n"; break;
-    case RegisterPatientResult::InvalidPhone: std::cout << "Неверный формат ввода. Повторите ввод.\n"; break;
-    case RegisterPatientResult::PhoneTaken: std::cout << "Неверный формат ввода. Повторите ввод.\n"; break;
-    case RegisterPatientResult::DatabaseError: std::cout << "Ошибка базы данных. Попробуйте ещё раз.\n"; break;
+    case RegisterPatientResult::InvalidFio: std::cout << "Ошибка: проверьте правильность ввода ФИО.\n"; break;
+    case RegisterPatientResult::InvalidPhone: std::cout << "Ошибка: телефон должен быть в формате +7XXXXXXXXXX.\n"; break;
+    case RegisterPatientResult::PhoneTaken: std::cout << "Ошибка: пациент с таким номером телефона уже зарегистрирован.\n"; break;
+    case RegisterPatientResult::DatabaseError: std::cout << "Не удалось зарегистрировать пациента: ошибка базы данных.\n"; break;
     }
 }
 
-
-
-// Выводит результат записи пациента на талон
 void printResult(BookResult r) {
     switch (r) {
     case BookResult::Ok: std::cout << "Запись успешно оформлена.\n"; break;
-    case BookResult::TicketNotFound: std::cout << "Неверный формат ввода. Повторите ввод.\n"; break;
-    case BookResult::TicketAlreadyBooked: std::cout << "Неверный формат ввода. Повторите ввод.\n"; break;
-    case BookResult::PatientNotFound: std::cout << "Неверный формат ввода. Повторите ввод.\n"; break;
+    case BookResult::TicketNotFound: std::cout << "Ошибка: талон не найден.\n"; break;
+    case BookResult::TicketAlreadyBooked: std::cout << "Ошибка: этот талон уже занят. Выберите свободный талон.\n"; break;
+    case BookResult::PatientNotFound: std::cout << "Ошибка: пациент не найден. Проверьте ID пациента.\n"; break;
     case BookResult::AlreadyBookedWithDoctorOnDate: std::cout << "Пациент уже записан к этому врачу на выбранную дату.\n"; break;
-    case BookResult::TicketInPast: std::cout << "Неверный формат ввода. Повторите ввод.\n"; break;
-    case BookResult::DatabaseError: std::cout << "Ошибка базы данных. Попробуйте ещё раз.\n"; break;
+    case BookResult::TicketInPast: std::cout << "Ошибка: нельзя записаться на прошедшие дату или время.\n"; break;
+    case BookResult::DatabaseError: std::cout << "Не удалось оформить запись: ошибка базы данных.\n"; break;
     }
 }
 
-
-
-// Выводит результат отмены записи
 void printResult(CancelResult r) {
     switch (r) {
     case CancelResult::Ok: std::cout << "Запись успешно отменена.\n"; break;
-    case CancelResult::TicketNotFound: std::cout << "Неверный формат ввода. Повторите ввод.\n"; break;
-    case CancelResult::TicketAlreadyFree: std::cout << "Неверный формат ввода. Повторите ввод.\n"; break;
-    case CancelResult::NotPatientTicket: std::cout << "Неверный формат ввода. Повторите ввод.\n"; break;
-    case CancelResult::DatabaseError: std::cout << "Ошибка базы данных. Попробуйте ещё раз.\n"; break;
+    case CancelResult::TicketNotFound: std::cout << "Ошибка: талон не найден.\n"; break;
+    case CancelResult::TicketAlreadyFree: std::cout << "Ошибка: выбранный талон уже свободен.\n"; break;
+    case CancelResult::NotPatientTicket: std::cout << "Ошибка: этот талон не принадлежит текущему пациенту.\n"; break;
+    case CancelResult::DatabaseError: std::cout << "Не удалось отменить запись: ошибка базы данных.\n"; break;
     }
 }
-
 
 
 // Меню администратора
 
-// Запускает меню администратора
+// Запускает меню администратора.
 void runAdminMenu(Service& service) {
     while (true) {
         std::cout << "\n--- Меню администратора ---\n"
@@ -350,106 +379,120 @@ void runAdminMenu(Service& service) {
             << "9. Просмотр списка пациентов\n"
             << "10. Просмотр истории обращений\n"
             << "11. Просмотр свободных талонов конкретного врача\n"
+            << "12. Просмотр всех талонов конкретного врача (свободных/занятых)\n"
             << "0. Выход\n";
-        std::string choice = readLine("Выберите пункт меню: ");
+        std::string choice = readLine("Выберите пункт меню (номер от 0 до 12; 0 — выход): ");
 
         if (choice == "1") {
             printTable(TICKET_HEADERS, ticketsToRows(service.getAllTickets()));
         }
         else if (choice == "2") {
-            std::string speciality = readLine("Специальность (Enter — пропустить): ");
-            std::string doctorFio = readLine("ФИО врача (Enter — пропустить): ");
-            std::string date = readLine("Дата ГГГГ-ММ-ДД (Enter — пропустить): ");
-            auto resp = service.getFreeSlots(speciality, doctorFio, date);
-            if (resp.status == FreeSlotsResult::Ok) {
-                printFreeSlots(resp.tickets);
-            }
-            else {
-                std::cout << "Неверный формат ввода. Повторите ввод.\n";
-            }
+            auto speciality = readCancellableLine("Специальность (например, Кардиология; Enter — пропустить)");
+            if (!speciality) continue;
+            auto doctorFio = readCancellableLine("ФИО врача (например, Иванов Иван; Enter — пропустить)");
+            if (!doctorFio) continue;
+            auto date = readCancellableLine("Дата ГГГГ-ММ-ДД (например, 2026-10-20; Enter — пропустить)");
+            if (!date) continue;
+
+            auto resp = service.getFreeSlots(*speciality, *doctorFio, *date);
+            if (resp.status == FreeSlotsResult::Ok) printFreeSlots(resp.tickets);
+            else std::cout << "Не удалось получить свободные талоны. Проверьте фильтры и формат даты.\n";
         }
         else if (choice == "3") {
             auto doctors = service.getDoctors();
             printTable({ "ID", "ФИО", "Специальность", "Кабинет" }, doctorsToRows(doctors));
-
             if (doctors.empty()) {
-                std::cout << "Неверный формат ввода. Повторите ввод.\n";
+                std::cout << "Список врачей пуст. Сначала добавьте врача.\n";
+                continue;
             }
-            else {
-                std::string doctorId = readUntilValid("ID врача: ",
-                    [&](const std::string& s) { return doctorIdExists(doctors, s); });
 
-                std::string date = readUntilValid("Дата приёма (ГГГГ-ММ-ДД): ",
-                    [](const std::string& s) { return validation.isValidDate(s); });
-
-                std::string time = readUntilValid("Время приёма (ЧЧ:ММ): ",
-                    [](const std::string& s) { return validation.isValidTime(s); });
-
-                printResult(service.createTicket(doctorId, date, time));
-            }
+            auto doctorId = readUntilValidOrCancel("ID врача (целое число из списка)", [&](const std::string& value) {
+                return doctorIdExists(doctors, value);
+                }, "Врач с таким ID не найден. Введите ID из списка или 0 для отмены.\n");
+            if (!doctorId) continue;
+            auto date = readUntilValidOrCancel("Дата приёма (формат ГГГГ-ММ-ДД, например 2026-10-20)",
+                [](const std::string& value) { return validation.isValidDate(value); },
+                "Некорректная дата. Используйте формат ГГГГ-ММ-ДД, например 2026-10-20. Введите 0 для отмены.\n");
+            if (!date) continue;
+            auto time = readUntilValidOrCancel("Время приёма (ЧЧ:ММ; запись только на :00 или :30, например 14:00 или 14:30)",
+                [](const std::string& value) { return isValidAppointmentTime(value); },
+                "Некорректное время. Используйте ЧЧ:00 или ЧЧ:30 (например, 14:00 или 14:30).\n");
+            if (!time) continue;
+            printResult(service.createTicket(*doctorId, *date, *time));
         }
         else if (choice == "4") {
             auto freeResp = service.getFreeSlots("", "", "");
+            if (freeResp.status != FreeSlotsResult::Ok) {
+                std::cout << "Не удалось загрузить свободные талоны.\n";
+                continue;
+            }
             printFreeSlots(freeResp.tickets);
+            if (freeResp.tickets.empty()) continue;
 
-            std::string ticketId = freeResp.tickets.empty()
-                ? readLine("ID талона: ")
-                : readUntilValid("ID талона: ",
-                    [&](const std::string& s) { return ticketIdExistsInList(freeResp.tickets, s); });
+            auto ticketId = readUntilValidOrCancel("ID талона (целое число из списка свободных талонов)", [&](const std::string& value) {
+                return ticketIdExistsInList(freeResp.tickets, value);
+                }, "Свободный талон с таким ID не найден. Введите ID из списка или 0 для отмены.\n");
+            if (!ticketId) continue;
+            auto patientRef = readCancellableLine("ID пациента (целое число) или телефон в формате +7XXXXXXXXXX, например +77001234567");
+            if (!patientRef) continue;
 
-            std::string patientRef = readLine("ID пациента или телефон (+7XXXXXXXXXX): ");
-
-            auto patient = findPatientByIdOrPhone(service, patientRef);
+            auto patient = findPatientByIdOrPhone(service, *patientRef);
             if (!patient) {
-                std::cout << "Неверный формат ввода. Повторите ввод.\n";
+                std::cout << "Пациент не найден. Проверьте ID или номер телефона.\n";
+                continue;
             }
-            else {
-                printResult(service.book(ticketId, patient->getId()));
-            }
+            printResult(service.book(*ticketId, patient->getId()));
         }
         else if (choice == "5") {
             auto allTickets = service.getAllTickets();
             std::vector<TicketView> booked;
-            for (const auto& t : allTickets)
-                if (!t.isFree()) booked.push_back(t);
+            for (const auto& ticket : allTickets)
+                if (!ticket.isFree()) booked.push_back(ticket);
             printTable(TICKET_HEADERS, ticketsToRows(booked));
-
             if (booked.empty()) {
-                std::cout << "Неверный формат ввода. Повторите ввод.\n";
+                std::cout << "Нет занятых талонов для отмены записи.\n";
+                continue;
             }
-            else {
-                std::string ticketIdStr = readUntilValid("ID талона: ",
-                    [&](const std::string& s) { return ticketIdExistsInList(booked, s); });
-                const TicketView* found = findInList(booked, *safeStoi(ticketIdStr));
-                printResult(service.cancel(ticketIdStr, *found->patientId));
+
+            auto ticketIdStr = readUntilValidOrCancel("ID занятого талона (целое число из списка)", [&](const std::string& value) {
+                return ticketIdExistsInList(booked, value);
+                }, "Занятый талон с таким ID не найден. Введите ID из списка или 0 для отмены.\n");
+            if (!ticketIdStr) continue;
+            const TicketView* found = findInList(booked, *safeStoi(*ticketIdStr));
+            if (!found || !found->patientId) {
+                std::cout << "Не удалось определить пациента по выбранному талону.\n";
+                continue;
             }
+            printResult(service.cancel(*ticketIdStr, *found->patientId));
         }
         else if (choice == "6") {
-            std::string fio = readUntilValid("ФИО врача: ",
-                [](const std::string& s) { return validation.isValidFio(s); });
-
-            std::string speciality = readLine("Специальность: ");
-
-            std::string office = readUntilValid("Номер кабинета: ",
-                [](const std::string& s) {
-                    auto n = safeStoi(s);
-                    return n.has_value() && validation.isValidOffice(*n);
-                });
-
-            printResult(service.addDoctor(fio, speciality, office));
+            auto fio = readUntilValidOrCancel("ФИО врача (например, Иванов Иван)", [](const std::string& value) {
+                return validation.isValidFio(value);
+                }, "Некорректное ФИО. Повторите ввод или введите 0 для отмены.\n");
+            if (!fio) continue;
+            auto speciality = readUntilValidOrCancel("Специальность врача (например, Кардиология)", [](const std::string& value) {
+                return !value.empty() && value.find_first_not_of(" \t") != std::string::npos;
+                }, "Специальность не должна быть пустой. Повторите ввод или введите 0 для отмены.\n");
+            if (!speciality) continue;
+            auto office = readUntilValidOrCancel("Номер кабинета (положительное целое число, например 12)", [](const std::string& value) {
+                auto number = safeStoi(value);
+                return number.has_value() && validation.isValidOffice(*number);
+                }, "Номер кабинета должен быть корректным положительным числом. Повторите ввод или введите 0 для отмены.\n");
+            if (!office) continue;
+            printResult(service.addDoctor(*fio, *speciality, *office));
         }
         else if (choice == "7") {
             auto doctors = service.getDoctors();
             printTable({ "ID", "ФИО", "Специальность", "Кабинет" }, doctorsToRows(doctors));
-
             if (doctors.empty()) {
-                std::cout << "Неверный формат ввода. Повторите ввод.\n";
+                std::cout << "Список врачей пуст. Удалять нечего.\n";
+                continue;
             }
-            else {
-                std::string id = readUntilValid("ID врача: ",
-                    [&](const std::string& s) { return doctorIdExists(doctors, s); });
-                printResult(service.removeDoctor(id));
-            }
+            auto id = readUntilValidOrCancel("ID врача для удаления (целое число из списка)", [&](const std::string& value) {
+                return doctorIdExists(doctors, value);
+                }, "Врач с таким ID не найден. Введите ID из списка или 0 для отмены.\n");
+            if (!id) continue;
+            printResult(service.removeDoctor(*id));
         }
         else if (choice == "8") {
             printTable({ "ID", "ФИО", "Специальность", "Кабинет" }, doctorsToRows(service.getDoctors()));
@@ -461,76 +504,100 @@ void runAdminMenu(Service& service) {
             printTable({ "ID", "Талон", "Пациент", "Время действия", "Действие" }, historyToRows(service.getHistory()));
         }
         else if (choice == "11") {
-            printTable({ "ID", "ФИО", "Специальность", "Кабинет" }, doctorsToRows(service.getDoctors()));
-            std::string doctorId = readLine("ID врача: ");
-            std::string date = readLine("Дата (ГГГГ-ММ-ДД): ");
-            auto resp = service.getFreeSlotsByDoctor(doctorId, date);
-            if (resp.status == FreeSlotsResult::Ok) {
-                printFreeSlots(resp.tickets);
+            auto doctors = service.getDoctors();
+            printTable({ "ID", "ФИО", "Специальность", "Кабинет" }, doctorsToRows(doctors));
+            if (doctors.empty()) {
+                std::cout << "Список врачей пуст.\n";
+                continue;
             }
-            else {
-                std::cout << "Неверный формат ввода. Повторите ввод.\n";
+            auto doctorId = readUntilValidOrCancel("ID врача (целое число из списка)", [&](const std::string& value) {
+                return doctorIdExists(doctors, value);
+                }, "Врач с таким ID не найден. Введите ID из списка или 0 для отмены.\n");
+            if (!doctorId) continue;
+            auto date = readUntilValidOrCancel("Дата (формат ГГГГ-ММ-ДД, например 2026-10-20)",
+                [](const std::string& value) { return validation.isValidDate(value); },
+                "Некорректная дата. Используйте формат ГГГГ-ММ-ДД или 0 для отмены.\n");
+            if (!date) continue;
+            auto resp = service.getFreeSlotsByDoctor(*doctorId, *date);
+            if (resp.status == FreeSlotsResult::Ok) printFreeSlots(resp.tickets);
+            else std::cout << "Не удалось получить свободные талоны врача. Проверьте ID и дату.\n";
+        }
+        else if (choice == "12") {
+            auto doctors = service.getDoctors();
+            printTable({ "ID", "ФИО", "Специальность", "Кабинет" }, doctorsToRows(doctors));
+            if (doctors.empty()) {
+                std::cout << "Список врачей пуст.\n";
+                continue;
             }
+            auto doctorId = readUntilValidOrCancel("ID врача (целое число из списка)", [&](const std::string& value) {
+                return doctorIdExists(doctors, value);
+                }, "Врач с таким ID не найден. Введите ID из списка или 0 для отмены.\n");
+            if (!doctorId) continue;
+            auto doctorIdValue = safeStoi(*doctorId);
+            if (!doctorIdValue) {
+                std::cout << "Некорректный ID врача.\n";
+                continue;
+            }
+            auto doctorTickets = ticketsByDoctor(service.getAllTickets(), *doctorIdValue);
+            std::cout << "Все талоны выбранного врача (свободные и занятые):\n";
+            if (doctorTickets.empty()) std::cout << "У этого врача пока нет талонов.\n";
+            else printTable(TICKET_HEADERS, ticketsToRows(doctorTickets));
         }
         else if (choice == "0") {
             break;
         }
         else {
-            std::cout << "Неверный формат ввода. Повторите ввод.\n";
+            std::cout << "Неизвестный пункт меню. Выберите число от 0 до 12.\n";
         }
     }
 }
 
 
-
 // Меню пациента
 
-// Выполняет вход пациента или предлагает регистрацию
+// Выполняет вход пациента или предлагает регистрацию.
 std::optional<int> loginOrRegisterPatient(Service& service) {
-    std::string phone = readUntilValid("Введите номер телефона (+7XXXXXXXXXX): ",
-        [](const std::string& s) { return validation.isValidPhone(s); });
+    auto phone = readUntilValidOrCancel("Введите телефон в формате +7XXXXXXXXXX (например, +77001234567)",
+        [](const std::string& value) { return validation.isValidPhone(value); },
+        "Некорректный телефон. Используйте формат +7XXXXXXXXXX или введите 0 для отмены.\n");
+    if (!phone) return std::nullopt;
 
-    auto loginResp = service.loginPatient(phone);
-
+    auto loginResp = service.loginPatient(*phone);
     if (loginResp.status == LoginPatientResult::Ok) {
         std::cout << "Добро пожаловать, " << loginResp.patient->getFio() << "!\n";
         return loginResp.patient->getId();
     }
-
     if (loginResp.status == LoginPatientResult::DatabaseError) {
-        std::cout << "Ошибка базы данных. Попробуйте ещё раз.\n";
+        std::cout << "Не удалось выполнить вход: ошибка базы данных.\n";
         return std::nullopt;
     }
 
-    // Пациент не найден — предлагаем регистрацию
-    std::string answer = readLine(
-        "Пациент с таким телефоном не найден. Зарегистрировать нового пациента? (1 - да, 2 - нет): ");
-    if (answer != "1") {
+    auto answer = readCancellableLine(
+        "Пациент с таким телефоном не найден. Зарегистрировать нового? (1 — да, 2 — нет)");
+    if (!answer || *answer != "1") {
+        if (answer && *answer != "2") std::cout << "Регистрация отменена. Для подтверждения используйте 1, для отказа — 2.\n";
         return std::nullopt;
     }
 
-    std::string fio = readLine("ФИО: ");
-    auto regResult = service.registerPatient(fio, phone);
+    auto fio = readUntilValidOrCancel("ФИО (например, Иванов Иван Иванович)", [](const std::string& value) {
+        return validation.isValidFio(value);
+        }, "Некорректное ФИО. Повторите ввод или введите 0 для отмены.\n");
+    if (!fio) return std::nullopt;
+
+    auto regResult = service.registerPatient(*fio, *phone);
     printResult(regResult);
-    if (regResult != RegisterPatientResult::Ok) {
-        return std::nullopt;
-    }
+    if (regResult != RegisterPatientResult::Ok) return std::nullopt;
 
-    auto newLogin = service.loginPatient(phone);
-    if (newLogin.status == LoginPatientResult::Ok) {
-        return newLogin.patient->getId();
-    }
+    auto newLogin = service.loginPatient(*phone);
+    if (newLogin.status == LoginPatientResult::Ok) return newLogin.patient->getId();
+    std::cout << "Регистрация выполнена, но выполнить вход не удалось. Попробуйте войти снова.\n";
     return std::nullopt;
 }
 
-
-
-// Запускает меню пациента
+// Запускает меню пациента.
 void runPatientMenu(Service& service) {
     auto patientIdOpt = loginOrRegisterPatient(service);
-    if (!patientIdOpt) {
-        return;
-    }
+    if (!patientIdOpt) return;
     int patientId = *patientIdOpt;
 
     while (true) {
@@ -541,66 +608,78 @@ void runPatientMenu(Service& service) {
             << "4. Просмотр своих талонов\n"
             << "5. Просмотр свободных талонов конкретного врача\n"
             << "0. Выход\n";
-        std::string choice = readLine("Выберите пункт меню: ");
+        std::string choice = readLine("Выберите пункт меню (номер от 0 до 5; 0 — выход): ");
 
         if (choice == "1") {
-            std::string speciality = readLine("Специальность (Enter — пропустить): ");
-            std::string doctorFio = readLine("ФИО врача (Enter — пропустить): ");
-            std::string date = readLine("Дата ГГГГ-ММ-ДД (Enter — пропустить): ");
-            auto resp = service.getFreeSlots(speciality, doctorFio, date);
-            if (resp.status == FreeSlotsResult::Ok) {
-                printFreeSlots(resp.tickets);
-            }
-            else {
-                std::cout << "Неверный формат ввода. Повторите ввод.\n";
-            }
+            auto speciality = readCancellableLine("Специальность (например, Кардиология; Enter — пропустить)");
+            if (!speciality) continue;
+            auto doctorFio = readCancellableLine("ФИО врача (например, Иванов Иван; Enter — пропустить)");
+            if (!doctorFio) continue;
+            auto date = readCancellableLine("Дата ГГГГ-ММ-ДД (например, 2026-10-20; Enter — пропустить)");
+            if (!date) continue;
+            auto resp = service.getFreeSlots(*speciality, *doctorFio, *date);
+            if (resp.status == FreeSlotsResult::Ok) printFreeSlots(resp.tickets);
+            else std::cout << "Не удалось получить свободные талоны. Проверьте фильтры и формат даты.\n";
         }
         else if (choice == "2") {
             auto freeResp = service.getFreeSlots("", "", "");
+            if (freeResp.status != FreeSlotsResult::Ok) {
+                std::cout << "Не удалось загрузить свободные талоны.\n";
+                continue;
+            }
             printFreeSlots(freeResp.tickets);
-
-            std::string ticketId = freeResp.tickets.empty()
-                ? readLine("ID талона: ")
-                : readUntilValid("ID талона: ",
-                    [&](const std::string& s) { return ticketIdExistsInList(freeResp.tickets, s); });
-
-            printResult(service.book(ticketId, patientId));
+            if (freeResp.tickets.empty()) continue;
+            auto ticketId = readUntilValidOrCancel("ID талона (целое число из списка свободных талонов)", [&](const std::string& value) {
+                return ticketIdExistsInList(freeResp.tickets, value);
+                }, "Свободный талон с таким ID не найден. Введите ID из списка или 0 для отмены.\n");
+            if (!ticketId) continue;
+            printResult(service.book(*ticketId, patientId));
         }
         else if (choice == "3") {
             auto myTickets = service.getPatientTickets(patientId);
             printTable(TICKET_HEADERS, ticketsToRows(myTickets));
-
-            std::string ticketId = myTickets.empty()
-                ? readLine("ID талона: ")
-                : readUntilValid("ID талона: ",
-                    [&](const std::string& s) { return ticketIdExistsInList(myTickets, s); });
-
-            printResult(service.cancel(ticketId, patientId));
+            if (myTickets.empty()) {
+                std::cout << "У вас нет записей для отмены.\n";
+                continue;
+            }
+            auto ticketId = readUntilValidOrCancel("ID талона для отмены (целое число из списка ваших записей)", [&](const std::string& value) {
+                return ticketIdExistsInList(myTickets, value);
+                }, "Ваш талон с таким ID не найден. Введите ID из списка или 0 для отмены.\n");
+            if (!ticketId) continue;
+            printResult(service.cancel(*ticketId, patientId));
         }
         else if (choice == "4") {
-            printTable(TICKET_HEADERS, ticketsToRows(service.getPatientTickets(patientId)));
+            auto myTickets = service.getPatientTickets(patientId);
+            if (myTickets.empty()) std::cout << "У вас пока нет записей.\n";
+            else printTable(TICKET_HEADERS, ticketsToRows(myTickets));
         }
         else if (choice == "5") {
-            printTable({ "ID", "ФИО", "Специальность", "Кабинет" }, doctorsToRows(service.getDoctors()));
-            std::string doctorId = readLine("ID врача: ");
-            std::string date = readLine("Дата (ГГГГ-ММ-ДД): ");
-            auto resp = service.getFreeSlotsByDoctor(doctorId, date);
-            if (resp.status == FreeSlotsResult::Ok) {
-                printFreeSlots(resp.tickets);
+            auto doctors = service.getDoctors();
+            printTable({ "ID", "ФИО", "Специальность", "Кабинет" }, doctorsToRows(doctors));
+            if (doctors.empty()) {
+                std::cout << "Список врачей пуст.\n";
+                continue;
             }
-            else {
-                std::cout << "Неверный формат ввода. Повторите ввод.\n";
-            }
+            auto doctorId = readUntilValidOrCancel("ID врача (целое число из списка)", [&](const std::string& value) {
+                return doctorIdExists(doctors, value);
+                }, "Врач с таким ID не найден. Введите ID из списка или 0 для отмены.\n");
+            if (!doctorId) continue;
+            auto date = readUntilValidOrCancel("Дата (формат ГГГГ-ММ-ДД, например 2026-10-20)",
+                [](const std::string& value) { return validation.isValidDate(value); },
+                "Некорректная дата. Используйте формат ГГГГ-ММ-ДД или 0 для отмены.\n");
+            if (!date) continue;
+            auto resp = service.getFreeSlotsByDoctor(*doctorId, *date);
+            if (resp.status == FreeSlotsResult::Ok) printFreeSlots(resp.tickets);
+            else std::cout << "Не удалось получить свободные талоны врача. Проверьте ID и дату.\n";
         }
         else if (choice == "0") {
             break;
         }
         else {
-            std::cout << "Неверный формат ввода. Повторите ввод.\n";
+            std::cout << "Неизвестный пункт меню. Выберите число от 0 до 5.\n";
         }
     }
 }
-
 
 
 int main() {
@@ -620,8 +699,9 @@ int main() {
                 << "2. Пациент\n"
                 << "0. Выход\n";
 
-            std::string choice = readUntilValid("Выберите роль: ",
-                [](const std::string& s) { return s == "0" || s == "1" || s == "2"; });
+            std::string choice = readUntilValid("Выберите роль (1 — администратор, 2 — пациент, 0 — выход): ",
+                [](const std::string& s) { return s == "0" || s == "1" || s == "2"; },
+                "Введите 1, 2 или 0.\n");
 
             if (choice == "1") {
                 try { runAdminMenu(service); }
