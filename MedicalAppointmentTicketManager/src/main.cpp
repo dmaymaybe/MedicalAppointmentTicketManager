@@ -20,7 +20,20 @@ Validation validation;
 
 
 
-// Ввод
+// Удаляет пробельные символы только в начале и конце строки.
+// Пробелы между словами (например, в ФИО) сохраняются.
+std::string trimWhitespace(const std::string& value) {
+    const std::string whitespace = " \t\r\n\f\v";
+    const size_t first = value.find_first_not_of(whitespace);
+    if (first == std::string::npos) {
+        return "";
+    }
+
+    const size_t last = value.find_last_not_of(whitespace);
+    return value.substr(first, last - first + 1);
+}
+
+// Ввод: сразу обрезаем пробелы по краям для всех полей программы.
 std::string readLine(const std::string& prompt) {
     std::cout << prompt;
     std::string line;
@@ -29,7 +42,7 @@ std::string readLine(const std::string& prompt) {
         std::cout << "\nВвод завершён. Выход из программы.\n";
         std::exit(0);
     }
-    return line;
+    return trimWhitespace(line);
 }
 
 
@@ -382,6 +395,8 @@ void runAdminMenu(Service& service) {
             << "12. Просмотр всех талонов конкретного врача (свободных/занятых)\n"
             << "0. Выход\n";
         std::string choice = readLine("Выберите пункт меню (номер от 0 до 12; 0 — выход): ");
+        // Дополнительно очищаем номер пункта меню перед сравнением.
+        choice = trimWhitespace(choice);
 
         if (choice == "1") {
             printTable(TICKET_HEADERS, ticketsToRows(service.getAllTickets()));
@@ -609,6 +624,8 @@ void runPatientMenu(Service& service) {
             << "5. Просмотр свободных талонов конкретного врача\n"
             << "0. Выход\n";
         std::string choice = readLine("Выберите пункт меню (номер от 0 до 5; 0 — выход): ");
+        // Дополнительно очищаем номер пункта меню перед сравнением.
+        choice = trimWhitespace(choice);
 
         if (choice == "1") {
             auto speciality = readCancellableLine("Специальность (например, Кардиология; Enter — пропустить)");
