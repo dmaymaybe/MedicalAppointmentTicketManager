@@ -15,6 +15,7 @@ struct HistoryRecord
 	int id = 0;
 	int ticket_id = 0;
 	int patient_id = 0;
+	std::string fio;
 	std::string action_time;
 	std::string action_type;
 };

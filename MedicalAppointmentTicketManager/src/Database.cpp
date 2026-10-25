@@ -284,19 +284,19 @@ std::vector<TicketView> Database::findFreeSlotsByDoctor(int doctor_id) const {
         result.push_back(ticketViewFromRow(q));
     }
     return result;
-}
+}   
 
 
 
 // Получение списка истории обращений
 std::vector<HistoryRecord> Database::listHistory() const {
-    SQLite::Statement q(db_, "SELECT id, ticket_id, patient_id, action_time, action_type FROM history ORDER BY action_time, id");
+    SQLite::Statement q(db_, "SELECT history.id, history.ticket_id, patients.fio, history.action_time, history.action_type FROM history JOIN patients ON history.patient_id = patients.id ORDER BY history.action_time, history.id");
     std::vector<HistoryRecord> result;
     while (q.executeStep()) {
         HistoryRecord r;
         r.id = q.getColumn("id").getInt();
         r.ticket_id = q.getColumn("ticket_id").getInt();
-        r.patient_id = q.getColumn("patient_id").getInt();
+        r.fio = q.getColumn("fio").getString();
         r.action_time = q.getColumn("action_time").getString();
         r.action_type = q.getColumn("action_type").getString();
         result.push_back(r);
@@ -367,8 +367,7 @@ void Database::initSchema() {
 
 
 
-// Сборка обычного Ticket из текущей строки выборки (для бизнес-логики).
-// const: читает только переданный Statement, db_ не трогает.
+// Сборка обычного Ticket из текущей строки выборки для бизнес-логики
 Ticket Database::ticketFromRow(SQLite::Statement& q) const {
     std::optional<int> patientId;
     if (!q.getColumn("patient_id").isNull()) {

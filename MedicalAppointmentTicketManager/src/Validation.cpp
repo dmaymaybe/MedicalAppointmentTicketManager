@@ -7,51 +7,108 @@
 
 
 
-// Проверка валидности ФИО
+// Проверка валидности ФИО: "Фамилия Имя [Отчество]" с полными словами (≥2 букв),
+// либо "Фамилия И. [О.]" с инициалами для имени/отчества
 bool Validation::isValidFio(const std::string& fio) const {
-
     const size_t MAX_LEN = 50;
 
-    size_t length = 0; // длина в символах
-    bool hasLetter = false; // хотя бы одна буква
+    std::vector<std::string> words;
+    std::string word;
+    size_t length = 0;
+
+    auto flushWord = [&]() {
+        if (!word.empty()) words.push_back(word);
+        word.clear();
+        };
 
     for (size_t i = 0; i < fio.size(); ) {
-        unsigned char b = static_cast<unsigned char>(fio[i]); // байт
-        unsigned int cp; // код символа в Юникоде
+        unsigned char b = static_cast<unsigned char>(fio[i]);
+        size_t charBytes;
 
-        if (b < 0x80) { // Значение байта меньше 128 = английский символ, цифра, пробел или точка
-            cp = b;
-            i += 1;
-        }
-        else if (b >= 0xC2 && b <= 0xDF) { // Два байта - кириллица 
-            if (i + 1 >= fio.size()) return false;
-            unsigned char b2 = static_cast<unsigned char>(fio[i + 1]);
-            if ((b2 & 0xC0) != 0x80) return false; // нужна вторая часть вида 10xxxxxx, иначе строка — битый UTF-8
+        if (b == ' ') { flushWord(); i += 1; ++length; continue; }
 
-            cp = ((b & 0x1F) << 6) | (b2 & 0x3F); // декодирование UTF-8 в код символа Юникода
-            i += 2;
+        if (b < 0x80) { // ASCII: допустима только точка
+            if (b != '.') return false;
+            word += fio[i];
+            charBytes = 1;
         }
-        else { // три и четыре байта = русских букв, пробела и точки среди них тоже нет
+        else if (b >= 0xC2 && b <= 0xDF) { // кириллица, 2 байта
+            if (i + 1 >= fio.size() || (static_cast<unsigned char>(fio[i + 1]) & 0xC0) != 0x80)
+                return false;
+            word += fio.substr(i, 2);
+            charBytes = 2;
+        }
+        else {
             return false;
         }
 
-        bool isLetter = (cp >= 0x0410 && cp <= 0x044F) // А-Я, а-я
-            || cp == 0x0401 // Ё
-            || cp == 0x0451; // ё
+        if (++length > MAX_LEN) return false;
+        i += charBytes;
+    }
+    flushWord();
 
-        if (isLetter) {
-            hasLetter = true;
-        }
-        else if (cp != ' ' && cp != '.') {
-            return false;
-        }
+    if (words.size() != 2 && words.size() != 3) return false;
 
-        if (++length > MAX_LEN) {
-            return false;
+    // Число кириллических символов в слове (без учета точки)
+    auto letterCount = [](const std::string& w) {
+        size_t n = 0;
+        for (size_t i = 0; i < w.size(); ) {
+            unsigned char b = static_cast<unsigned char>(w[i]);
+            i += (b < 0x80) ? 1 : 2;
+            if (b != '.') ++n;
         }
+        return n;
+        };
+
+    // Фамилия: только полное слово (без точки), минимум 2 буквы
+    if (words[0].find('.') != std::string::npos || letterCount(words[0]) < 2) return false;
+
+    // Имя/отчество: либо полное слово (≥2 буквы, без точки), либо инициал (1 буква + точка в конце)
+    for (size_t i = 1; i < words.size(); ++i) {
+        const std::string& w = words[i];
+        bool isInitial = w.size() >= 3 && w.back() == '.' && letterCount(w) == 1 &&
+            w.find('.') == w.size() - 1;
+        bool isFull = w.find('.') == std::string::npos && letterCount(w) >= 2;
+        if (!isInitial && !isFull) return false;
     }
 
-    return hasLetter; // Пустая строка и строка из одних пробелов и точек не проходят
+    return true;
+}
+
+
+
+// Приводит провалидированное ФИО к виду "Фамилия И." или "Фамилия И. О."
+std::string Validation::formatFio(const std::string& fio) const {
+    std::vector<std::string> words;
+    std::string word;
+    for (char c : fio) {
+        if (c == ' ') { if (!word.empty()) { words.push_back(word); word.clear(); } }
+        else word += c;
+    }
+    if (!word.empty()) words.push_back(word);
+
+    std::string result = words[0]; // Фамилия без изменений
+    for (size_t i = 1; i < words.size(); ++i) {
+        // Первые 1-2 байта слова = первая буква
+        unsigned char b = static_cast<unsigned char>(words[i][0]);
+        std::string firstLetter = words[i].substr(0, (b < 0x80) ? 1 : 2);
+
+        // Приведение к верхнему регистру кириллицы (а-я -> А-Я, ё -> Ё)
+        if (firstLetter.size() == 2) {
+            unsigned int cp = ((static_cast<unsigned char>(firstLetter[0]) & 0x1F) << 6)
+                | (static_cast<unsigned char>(firstLetter[1]) & 0x3F);
+            if (cp >= 0x0430 && cp <= 0x044F) cp -= 0x20;
+            else if (cp == 0x0451) cp = 0x0401;
+            firstLetter.clear();
+            firstLetter += static_cast<char>(0xC0 | (cp >> 6));
+            firstLetter += static_cast<char>(0x80 | (cp & 0x3F));
+        }
+
+        result += ' ';
+        result += firstLetter;
+        result += '.';
+    }
+    return result;
 }
 
 

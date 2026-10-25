@@ -162,7 +162,7 @@ std::vector<std::vector<std::string>> ticketsToRows(const std::vector<TicketView
 std::vector<std::vector<std::string>> historyToRows(const std::vector<HistoryRecord>& history) {
     std::vector<std::vector<std::string>> rows;
     for (const auto& h : history)
-        rows.push_back({ std::to_string(h.id), std::to_string(h.ticket_id), std::to_string(h.patient_id),
+        rows.push_back({ std::to_string(h.id), std::to_string(h.ticket_id), h.fio,
                           h.action_time, h.action_type });
     return rows;
 }
@@ -393,8 +393,9 @@ void runAdminMenu(Service& service) {
             << "10. Просмотр истории обращений\n"
             << "11. Просмотр свободных талонов конкретного врача\n"
             << "12. Просмотр всех талонов конкретного врача (свободных/занятых)\n"
+            << "13. Добавить пациента\n"
             << "0. Выход\n";
-        std::string choice = readLine("Выберите пункт меню (номер от 0 до 12; 0 — выход): ");
+        std::string choice = readLine("Выберите пункт меню (номер от 0 до 13; 0 — выход): ");
         // Дополнительно очищаем номер пункта меню перед сравнением.
         choice = trimWhitespace(choice);
 
@@ -402,9 +403,15 @@ void runAdminMenu(Service& service) {
             printTable(TICKET_HEADERS, ticketsToRows(service.getAllTickets()));
         }
         else if (choice == "2") {
+            auto doctors = service.getDoctors();
+            if (!doctors.empty()) {
+                std::cout << "Список врачей (для точного ввода ФИО в фильтре ниже):\n";
+                printTable({ "ID", "ФИО", "Специальность", "Кабинет" }, doctorsToRows(doctors));
+            }
+
             auto speciality = readCancellableLine("Специальность (например, Кардиология; Enter — пропустить)");
             if (!speciality) continue;
-            auto doctorFio = readCancellableLine("ФИО врача (например, Иванов Иван; Enter — пропустить)");
+            auto doctorFio = readCancellableLine("ФИО врача (скопируйте из списка выше, например Иванов И. И.; Enter — пропустить)");
             if (!doctorFio) continue;
             auto date = readCancellableLine("Дата ГГГГ-ММ-ДД (например, 2026-10-20; Enter — пропустить)");
             if (!date) continue;
@@ -481,7 +488,7 @@ void runAdminMenu(Service& service) {
             printResult(service.cancel(*ticketIdStr, *found->patientId));
         }
         else if (choice == "6") {
-            auto fio = readUntilValidOrCancel("ФИО врача (например, Иванов Иван)", [](const std::string& value) {
+            auto fio = readUntilValidOrCancel("ФИО врача (например, Иванов Иван Иванович)", [](const std::string& value) {
                 return validation.isValidFio(value);
                 }, "Некорректное ФИО. Повторите ввод или введите 0 для отмены.\n");
             if (!fio) continue;
@@ -558,11 +565,22 @@ void runAdminMenu(Service& service) {
             if (doctorTickets.empty()) std::cout << "У этого врача пока нет талонов.\n";
             else printTable(TICKET_HEADERS, ticketsToRows(doctorTickets));
         }
+        else if (choice == "13") {
+            auto fio = readUntilValidOrCancel("ФИО пациента (например, Иванов Иван Иванович)", [](const std::string& value) {
+                return validation.isValidFio(value);
+                }, "Некорректное ФИО. Повторите ввод или введите 0 для отмены.\n");
+            if (!fio) continue;
+            auto phone = readUntilValidOrCancel("Телефон пациента в формате +7XXXXXXXXXX (например, +77001234567)",
+                [](const std::string& value) { return validation.isValidPhone(value); },
+                "Некорректный телефон. Используйте формат +7XXXXXXXXXX или введите 0 для отмены.\n");
+            if (!phone) continue;
+            printResult(service.registerPatient(*fio, *phone));
+        }
         else if (choice == "0") {
             break;
         }
         else {
-            std::cout << "Неизвестный пункт меню. Выберите число от 0 до 12.\n";
+            std::cout << "Неизвестный пункт меню. Выберите число от 0 до 13.\n";
         }
     }
 }
@@ -630,7 +648,7 @@ void runPatientMenu(Service& service) {
         if (choice == "1") {
             auto speciality = readCancellableLine("Специальность (например, Кардиология; Enter — пропустить)");
             if (!speciality) continue;
-            auto doctorFio = readCancellableLine("ФИО врача (например, Иванов Иван; Enter — пропустить)");
+            auto doctorFio = readCancellableLine("ФИО врача (например, Иванов Иван Иванович; Enter — пропустить)");
             if (!doctorFio) continue;
             auto date = readCancellableLine("Дата ГГГГ-ММ-ДД (например, 2026-10-20; Enter — пропустить)");
             if (!date) continue;
@@ -638,19 +656,22 @@ void runPatientMenu(Service& service) {
             if (resp.status == FreeSlotsResult::Ok) printFreeSlots(resp.tickets);
             else std::cout << "Не удалось получить свободные талоны. Проверьте фильтры и формат даты.\n";
         }
-        else if (choice == "2") {
-            auto freeResp = service.getFreeSlots("", "", "");
-            if (freeResp.status != FreeSlotsResult::Ok) {
-                std::cout << "Не удалось загрузить свободные талоны.\n";
-                continue;
+        if (choice == "1") {
+            auto doctors = service.getDoctors();
+            if (!doctors.empty()) {
+                std::cout << "Список врачей (для точного ввода ФИО в фильтре ниже):\n";
+                printTable({ "ID", "ФИО", "Специальность", "Кабинет" }, doctorsToRows(doctors));
             }
-            printFreeSlots(freeResp.tickets);
-            if (freeResp.tickets.empty()) continue;
-            auto ticketId = readUntilValidOrCancel("ID талона (целое число из списка свободных талонов)", [&](const std::string& value) {
-                return ticketIdExistsInList(freeResp.tickets, value);
-                }, "Свободный талон с таким ID не найден. Введите ID из списка или 0 для отмены.\n");
-            if (!ticketId) continue;
-            printResult(service.book(*ticketId, patientId));
+
+            auto speciality = readCancellableLine("Специальность (например, Кардиология; Enter — пропустить)");
+            if (!speciality) continue;
+            auto doctorFio = readCancellableLine("ФИО врача (скопируйте из списка выше, например Иванов И. И.; Enter — пропустить)");
+            if (!doctorFio) continue;
+            auto date = readCancellableLine("Дата ГГГГ-ММ-ДД (например, 2026-10-20; Enter — пропустить)");
+            if (!date) continue;
+            auto resp = service.getFreeSlots(*speciality, *doctorFio, *date);
+            if (resp.status == FreeSlotsResult::Ok) printFreeSlots(resp.tickets);
+            else std::cout << "Не удалось получить свободные талоны. Проверьте фильтры и формат даты.\n";
         }
         else if (choice == "3") {
             auto myTickets = service.getPatientTickets(patientId);
