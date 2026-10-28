@@ -7,13 +7,12 @@
 
 
 
-// Проверка валидности ФИО: "Фамилия Имя [Отчество]" с полными словами (≥2 букв),
-// либо "Фамилия И. [О.]" с инициалами для имени/отчества
+// Проверка валидности ФИО: "Фамилия Имя [Отчество]" с полными словами (>=2 букв), либо "Фамилия И. [О.]" с инициалами для имени/отчества
 bool Validation::isValidFio(const std::string& fio) const {
     const size_t MAX_LEN = 50;
 
-    std::vector<std::string> words;
-    std::string word;
+    std::vector<std::string> words; // уже разобранные слова
+    std::string word; // текущее слово
     size_t length = 0;
 
     auto flushWord = [&]() {
@@ -27,7 +26,7 @@ bool Validation::isValidFio(const std::string& fio) const {
 
         if (b == ' ') { flushWord(); i += 1; ++length; continue; }
 
-        if (b < 0x80) { // ASCII: допустима только точка
+        if (b < 0x80) { // по ASCII: допустима только точка
             if (b != '.') return false;
             word += fio[i];
             charBytes = 1;
@@ -63,7 +62,7 @@ bool Validation::isValidFio(const std::string& fio) const {
     // Фамилия: только полное слово (без точки), минимум 2 буквы
     if (words[0].find('.') != std::string::npos || letterCount(words[0]) < 2) return false;
 
-    // Имя/отчество: либо полное слово (≥2 буквы, без точки), либо инициал (1 буква + точка в конце)
+    // Имя/отчество: либо полное слово (>=2 буквы, без точки), либо инициал (1 буква + точка в конце)
     for (size_t i = 1; i < words.size(); ++i) {
         const std::string& w = words[i];
         bool isInitial = w.size() >= 3 && w.back() == '.' && letterCount(w) == 1 &&

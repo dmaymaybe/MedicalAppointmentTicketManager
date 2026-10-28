@@ -204,7 +204,8 @@ FreeSlotsResponse Service::getFreeSlots(const std::string& speciality, const std
 		auto doctors = db.listDoctors();
 
 		for (const auto& doc : doctors) {
-			// Сравнение точное, с учетом регистра: "терапевт" не найдет "Терапевт". В меню нужно показать пользователю список специальностей или явно требовать точного написания
+			// Сравнение точное, с учетом регистра: "терапевт" не найдет "Терапевт"
+			
 			// Фильтр по специальности
 			if (!speciality.empty() && doc.getSpeciality() != speciality)
 				continue;

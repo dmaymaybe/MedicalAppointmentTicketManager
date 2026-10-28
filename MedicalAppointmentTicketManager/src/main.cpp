@@ -73,8 +73,7 @@ std::string utf8PadRight(const std::string& s, size_t targetWidth) {
 
 
 // Выводит таблицу с выравниванием столбцов
-void printTable(const std::vector<std::string>& headers,
-    const std::vector<std::vector<std::string>>& rows) {
+void printTable(const std::vector<std::string>& headers, const std::vector<std::vector<std::string>>& rows) {
 
     // Ширина колонки берется сначала по длине заголовка
     size_t cols = headers.size();
@@ -130,7 +129,7 @@ const std::vector<std::string> TICKET_HEADERS = { "ID", "ФИО врача", "С
 std::vector<std::vector<std::string>> doctorsToRows(const std::vector<Doctor>& doctors) {
     std::vector<std::vector<std::string>> rows;
     for (const auto& d : doctors)
-        rows.push_back({ std::to_string(d.getId()), d.getFio(), d.getSpeciality(), std::to_string(d.getOffice()) });
+        rows.push_back({ std::to_string(d.getId()), validation.formatFio(d.getFio()), d.getSpeciality(), std::to_string(d.getOffice()) });
     return rows;
 }
 
@@ -140,7 +139,7 @@ std::vector<std::vector<std::string>> doctorsToRows(const std::vector<Doctor>& d
 std::vector<std::vector<std::string>> patientsToRows(const std::vector<Patient>& patients) {
     std::vector<std::vector<std::string>> rows;
     for (const auto& p : patients)
-        rows.push_back({ std::to_string(p.getId()), p.getFio(), p.getPhone() });
+        rows.push_back({ std::to_string(p.getId()), validation.formatFio(p.getFio()), p.getPhone() });
     return rows;
 }
 
@@ -150,8 +149,8 @@ std::vector<std::vector<std::string>> patientsToRows(const std::vector<Patient>&
 std::vector<std::vector<std::string>> ticketsToRows(const std::vector<TicketView>& tickets) {
     std::vector<std::vector<std::string>> rows;
     for (const auto& t : tickets) {
-        std::string patientCell = t.patientFio ? *t.patientFio : "свободен";
-        rows.push_back({ std::to_string(t.id), t.doctorFio, t.speciality, t.date, t.time, patientCell });
+        std::string patientCell = t.patientFio ? validation.formatFio(*t.patientFio) : "свободен";
+        rows.push_back({ std::to_string(t.id), validation.formatFio(t.doctorFio), t.speciality, t.date, t.time, patientCell });
     }
     return rows;
 }
@@ -162,8 +161,7 @@ std::vector<std::vector<std::string>> ticketsToRows(const std::vector<TicketView
 std::vector<std::vector<std::string>> historyToRows(const std::vector<HistoryRecord>& history) {
     std::vector<std::vector<std::string>> rows;
     for (const auto& h : history)
-        rows.push_back({ std::to_string(h.id), std::to_string(h.ticket_id), h.fio,
-                          h.action_time, h.action_type });
+        rows.push_back({ std::to_string(h.id), std::to_string(h.ticket_id), validation.formatFio(h.fio), h.action_time, h.action_type });
     return rows;
 }
 
@@ -216,8 +214,7 @@ std::optional<Patient> findPatientByIdOrPhone(Service& service, const std::strin
         return std::nullopt;
     }
 
-    bool allDigits = !input.empty() &&
-        std::all_of(input.begin(), input.end(), [](unsigned char c) { return std::isdigit(c); });
+    bool allDigits = !input.empty() && std::all_of(input.begin(), input.end(), [](unsigned char c) { return std::isdigit(c); });
     if (!allDigits) {
         return std::nullopt;
     }
@@ -597,7 +594,7 @@ std::optional<int> loginOrRegisterPatient(Service& service) {
 
     auto loginResp = service.loginPatient(*phone);
     if (loginResp.status == LoginPatientResult::Ok) {
-        std::cout << "Добро пожаловать, " << loginResp.patient->getFio() << "!\n";
+        std::cout << "Добро пожаловать, " << validation.formatFio(loginResp.patient->getFio()) << "!\n";
         return loginResp.patient->getId();
     }
     if (loginResp.status == LoginPatientResult::DatabaseError) {

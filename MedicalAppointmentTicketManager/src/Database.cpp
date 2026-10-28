@@ -209,8 +209,7 @@ bool Database::cancelBooking(int ticket_id, int patient_id) {
 
 // Список записей пациента (с ФИО врача, специальностью и т.д. для вывода в таблицу)
 std::vector<TicketView> Database::listPatientTickets(int patient_id) const {
-    SQLite::Statement q(db_, std::string(TICKET_VIEW_SELECT) +
-        "WHERE t.patient_id = ? ORDER BY t.date, t.time");
+    SQLite::Statement q(db_, std::string(TICKET_VIEW_SELECT) + "WHERE t.patient_id = ? ORDER BY t.date, t.time");
     q.bind(1, patient_id);
 
     std::vector<TicketView> result;
@@ -290,7 +289,7 @@ std::vector<TicketView> Database::findFreeSlotsByDoctor(int doctor_id) const {
 
 // Получение списка истории обращений
 std::vector<HistoryRecord> Database::listHistory() const {
-    SQLite::Statement q(db_, "SELECT history.id, history.ticket_id, patients.fio, history.action_time, history.action_type FROM history JOIN patients ON history.patient_id = patients.id ORDER BY history.action_time, history.id");
+    SQLite::Statement q(db_, "SELECT h.id, h.ticket_id, p.fio, h.action_time, h.action_type FROM history h JOIN patients p ON h.patient_id = p.id ORDER BY h.action_time, h.id");
     std::vector<HistoryRecord> result;
     while (q.executeStep()) {
         HistoryRecord r;
