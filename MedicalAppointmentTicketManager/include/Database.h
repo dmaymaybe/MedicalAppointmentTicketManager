@@ -16,6 +16,8 @@ struct HistoryRecord
 	int ticket_id = 0;
 	int patient_id = 0;
 	std::string fio;
+	std::string doctor_fio;
+	std::string speciality;
 	std::string action_time;
 	std::string action_type;
 };
@@ -44,7 +46,7 @@ class Database
 {
 public:
 	explicit Database(const std::string& path);
-	
+
 	std::vector<Doctor> listDoctors() const;
 	std::optional<Doctor> findDoctorById(int id) const;
 	int addDoctor(const Doctor& d); // Возвращает новый id

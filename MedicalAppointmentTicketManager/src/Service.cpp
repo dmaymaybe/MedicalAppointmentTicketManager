@@ -4,6 +4,101 @@
 #include <ctime>
 #include <tuple>
 #include <algorithm>
+#include <cctype>
+
+
+namespace {
+
+	// Приводит латинские и кириллические буквы к нижнему регистру для поиска
+	std::string toLowerSearchText(const std::string& value) {
+		std::string result;
+		result.reserve(value.size());
+
+		for (size_t i = 0; i < value.size();) {
+			unsigned char first = static_cast<unsigned char>(value[i]);
+
+			if (i + 1 < value.size() && first == 0xD0) {
+				unsigned char second = static_cast<unsigned char>(value[i + 1]);
+				if (second >= 0x90 && second <= 0x9F) {
+					result.push_back(static_cast<char>(0xD0));
+					result.push_back(static_cast<char>(second + 0x20));
+				}
+				else if (second >= 0xA0 && second <= 0xAF) {
+					result.push_back(static_cast<char>(0xD1));
+					result.push_back(static_cast<char>(second - 0x20));
+				}
+				else if (second == 0x81) { // Ё -> ё
+					result.push_back(static_cast<char>(0xD1));
+					result.push_back(static_cast<char>(0x91));
+				}
+				else {
+					result.push_back(static_cast<char>(first));
+					result.push_back(static_cast<char>(second));
+				}
+				i += 2;
+			}
+			else if (i + 1 < value.size() && first == 0xD1) {
+				result.push_back(static_cast<char>(first));
+				result.push_back(value[i + 1]);
+				i += 2;
+			}
+			else {
+				result.push_back(static_cast<char>(std::tolower(first)));
+				++i;
+			}
+		}
+
+		return result;
+	}
+
+
+
+	// Разбивает ФИО на слова, не учитывая точки после инициалов
+	std::vector<std::string> splitFioWords(const std::string& fio) {
+		std::vector<std::string> words;
+		std::string current;
+		const std::string lowerFio = toLowerSearchText(fio);
+
+		for (char c : lowerFio) {
+			if (c == '.' || std::isspace(static_cast<unsigned char>(c))) {
+				if (!current.empty()) {
+					words.push_back(current);
+					current.clear();
+				}
+			}
+			else {
+				current += c;
+			}
+		}
+		if (!current.empty()) words.push_back(current);
+		return words;
+	}
+
+
+
+	// ФИО можно искать по фамилии, полному имени или инициалам без учета регистра
+	bool matchesDoctorFio(const std::string& doctorFio, const std::string& searchFio) {
+		const auto doctorWords = splitFioWords(doctorFio);
+		const auto searchWords = splitFioWords(searchFio);
+		if (searchWords.empty()) return true;
+
+		size_t doctorIndex = 0;
+		for (const auto& searchWord : searchWords) {
+			bool found = false;
+			while (doctorIndex < doctorWords.size()) {
+				const auto& doctorWord = doctorWords[doctorIndex++];
+				if (doctorWord.starts_with(searchWord)) {
+					found = true;
+					break;
+				}
+			}
+			if (!found) return false;
+		}
+
+		return true;
+	}
+
+}
 
 
 
@@ -204,13 +299,11 @@ FreeSlotsResponse Service::getFreeSlots(const std::string& speciality, const std
 		auto doctors = db.listDoctors();
 
 		for (const auto& doc : doctors) {
-			// Сравнение точное, с учетом регистра: "терапевт" не найдет "Терапевт"
-			
-			// Фильтр по специальности
-			if (!speciality.empty() && doc.getSpeciality() != speciality)
+			// Фильтр по специальности: регистр букв не важен
+			if (!speciality.empty() && toLowerSearchText(doc.getSpeciality()) != toLowerSearchText(speciality))
 				continue;
-			// Фильтр по ФИО врача
-			if (!doctor_fio.empty() && doc.getFio() != doctor_fio)
+			// ФИО можно указать полностью, инициалами или только фамилию
+			if (!doctor_fio.empty() && !matchesDoctorFio(doc.getFio(), doctor_fio))
 				continue;
 
 			// Свободные талоны этого врача
@@ -229,7 +322,7 @@ FreeSlotsResponse Service::getFreeSlots(const std::string& speciality, const std
 		// После объединения талонов сортируем общий список по дате и времени
 		std::sort(resp.tickets.begin(), resp.tickets.end(), [](const TicketView& a, const TicketView& b) {
 			return std::tie(a.date, a.time) < std::tie(b.date, b.time);
-		});
+			});
 
 		resp.status = FreeSlotsResult::Ok;
 	}
@@ -241,7 +334,7 @@ FreeSlotsResponse Service::getFreeSlots(const std::string& speciality, const std
 }
 
 
-// Поиск свободных талонов конкретного врача на дату
+// Поиск свободных талонов конкретного врача на дату или на все будущие даты
 FreeSlotsResponse Service::getFreeSlotsByDoctor(const std::string& doctor_id, const std::string& date) const {
 	FreeSlotsResponse resp;
 
@@ -251,8 +344,8 @@ FreeSlotsResponse Service::getFreeSlotsByDoctor(const std::string& doctor_id, co
 		return resp;
 	}
 
-	// Проверка даты
-	if (!validation.isValidDate(date)) {
+	// Дата необязательна: пустое значение означает поиск по всем будущим датам
+	if (!date.empty() && !validation.isValidDate(date)) {
 		resp.status = FreeSlotsResult::InvalidDate;
 		return resp;
 	}
@@ -264,8 +357,8 @@ FreeSlotsResponse Service::getFreeSlotsByDoctor(const std::string& doctor_id, co
 			return resp;
 		}
 
-		// Читаем слоты и отсекаем прошедшие
-		auto slots = db.findFreeSlots(*idOpt, date);
+		// Если дата не задана, показываем все будущие свободные талоны врача
+		auto slots = date.empty() ? db.findFreeSlotsByDoctor(*idOpt) : db.findFreeSlots(*idOpt, date);
 		for (const auto& t : slots) {
 			if (validation.isSlotInPast(t.date, t.time))
 				continue;
