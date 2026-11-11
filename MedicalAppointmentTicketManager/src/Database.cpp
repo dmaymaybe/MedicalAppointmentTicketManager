@@ -2,8 +2,15 @@
 
 
 
+// Проверка записан ли пациент на талон
+bool TicketView::isFree() const {
+    return !patientId.has_value();
+}
+
+
+
 Database::Database(const std::string& path) : db_(path, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE) {
-	initSchema();
+    initSchema();
 }
 
 
@@ -45,21 +52,21 @@ std::optional<Doctor> Database::findDoctorById(int id) const {
 
 // Добавление нового врача
 int Database::addDoctor(const Doctor& d) {
-	SQLite::Statement q(db_, "INSERT INTO doctors (fio, speciality, office) VALUES (?, ?, ?)");
+    SQLite::Statement q(db_, "INSERT INTO doctors (fio, speciality, office) VALUES (?, ?, ?)");
 
-	q.bind(1, d.getFio());
+    q.bind(1, d.getFio());
     q.bind(2, d.getSpeciality());
-	q.bind(3, d.getOffice());
+    q.bind(3, d.getOffice());
 
-	q.exec();
+    q.exec();
 
-	return static_cast<int>(db_.getLastInsertRowid());
+    return static_cast<int>(db_.getLastInsertRowid());
 }
 
 
 
 // Удаление врача
-void Database::removeDoctor(int id) const {
+void Database::removeDoctor(int id) {
     SQLite::Statement q(db_, "DELETE FROM doctors WHERE id = ?");
     q.bind(1, id);
     q.exec();
@@ -136,15 +143,28 @@ std::vector<Patient> Database::listPatients() const {
 
 
 
-// Поиск свободных талонов
-std::vector<Ticket> Database::findFreeSlots(int doctor_id, const std::string& date) {
-    SQLite::Statement q(db_, "SELECT id, doctor_id, date, time, patient_id FROM tickets WHERE doctor_id = ? AND date = ? AND patient_id IS NULL ORDER BY time");
+// Общие JOIN для запросов талонов: врач подключается
+// через JOIN (у талона всегда есть врач), пациент - через LEFT JOIN,
+// так как у свободного талона patient_id может быть NULL
+static const char* TICKET_VIEW_SELECT =
+"SELECT t.id, t.doctor_id, d.fio AS doctor_fio, d.speciality, "
+"t.date, t.time, t.patient_id, p.fio AS patient_fio "
+"FROM tickets t "
+"JOIN doctors d ON t.doctor_id = d.id "
+"LEFT JOIN patients p ON t.patient_id = p.id ";
+
+
+
+// Поиск свободных талонов конкретного врача на конкретную дату
+std::vector<TicketView> Database::findFreeSlots(int doctor_id, const std::string& date) const {
+    SQLite::Statement q(db_, std::string(TICKET_VIEW_SELECT) +
+        "WHERE t.doctor_id = ? AND t.date = ? AND t.patient_id IS NULL ORDER BY t.time");
     q.bind(1, doctor_id);
     q.bind(2, date);
 
-    std::vector<Ticket> result;
+    std::vector<TicketView> result;
     while (q.executeStep()) {
-        result.push_back(ticketFromRow(q));
+        result.push_back(ticketViewFromRow(q));
     }
     return result;
 }
@@ -187,21 +207,21 @@ bool Database::cancelBooking(int ticket_id, int patient_id) {
 
 
 
-// Список записей пациента
-std::vector<Ticket> Database::listPatientTickets(int patient_id) {
-    SQLite::Statement q(db_, "SELECT id, doctor_id, date, time, patient_id FROM tickets WHERE patient_id = ? ORDER BY date, time");
+// Список записей пациента (с ФИО врача, специальностью и т.д. для вывода в таблицу)
+std::vector<TicketView> Database::listPatientTickets(int patient_id) const {
+    SQLite::Statement q(db_, std::string(TICKET_VIEW_SELECT) + "WHERE t.patient_id = ? ORDER BY t.date, t.time");
     q.bind(1, patient_id);
 
-    std::vector<Ticket> result;
+    std::vector<TicketView> result;
     while (q.executeStep()) {
-        result.push_back(ticketFromRow(q));
+        result.push_back(ticketViewFromRow(q));
     }
     return result;
 }
 
 
-// Поиск талона по ID
-std::optional<Ticket> Database::findTicketById(int id) {
+// Поиск талона по ID (для бизнес-логики book/cancel)
+std::optional<Ticket> Database::findTicketById(int id) const {
     SQLite::Statement q(db_, "SELECT id, doctor_id, date, time, patient_id FROM tickets WHERE id = ?");
     q.bind(1, id);
 
@@ -238,12 +258,13 @@ int Database::addTicket(const Ticket& t) {
 
 
 
-// Получение списка всех талонов
-std::vector<Ticket> Database::listAllTickets() {
-    SQLite::Statement q(db_, "SELECT id, doctor_id, date, time, patient_id FROM tickets ORDER BY date, time");
-    std::vector<Ticket> result;
+// Получение списка всех талонов (с ФИО врача, специальностью и ФИО пациента)
+std::vector<TicketView> Database::listAllTickets() const {
+    SQLite::Statement q(db_, std::string(TICKET_VIEW_SELECT) + "ORDER BY t.date, t.time");
+
+    std::vector<TicketView> result;
     while (q.executeStep()) {
-        result.push_back(ticketFromRow(q));
+        result.push_back(ticketViewFromRow(q));
     }
     return result;
 }
@@ -251,16 +272,15 @@ std::vector<Ticket> Database::listAllTickets() {
 
 
 // Все свободные талоны врача, начиная с текущей даты
-std::vector<Ticket> Database::findFreeSlotsByDoctor(int doctor_id) {
-    SQLite::Statement q(db_,
-        "SELECT id, doctor_id, date, time, patient_id FROM tickets "
-        "WHERE doctor_id = ? AND patient_id IS NULL AND date >= date('now','localtime') "
-        "ORDER BY date, time");
+std::vector<TicketView> Database::findFreeSlotsByDoctor(int doctor_id) const {
+    SQLite::Statement q(db_, std::string(TICKET_VIEW_SELECT) +
+        "WHERE t.doctor_id = ? AND t.patient_id IS NULL AND t.date >= date('now','localtime') "
+        "ORDER BY t.date, t.time");
     q.bind(1, doctor_id);
 
-    std::vector<Ticket> result;
+    std::vector<TicketView> result;
     while (q.executeStep()) {
-        result.push_back(ticketFromRow(q));
+        result.push_back(ticketViewFromRow(q));
     }
     return result;
 }
@@ -269,13 +289,15 @@ std::vector<Ticket> Database::findFreeSlotsByDoctor(int doctor_id) {
 
 // Получение списка истории обращений
 std::vector<HistoryRecord> Database::listHistory() const {
-    SQLite::Statement q(db_, "SELECT id, ticket_id, patient_id, action_time, action_type FROM history ORDER BY action_time, id");
+    SQLite::Statement q(db_, "SELECT h.id, h.ticket_id, p.fio, d.fio AS doctor_fio, d.speciality, h.action_time, h.action_type FROM history h JOIN patients p ON h.patient_id = p.id JOIN tickets t ON h.ticket_id = t.id JOIN doctors d ON t.doctor_id = d.id ORDER BY h.action_time, h.id");
     std::vector<HistoryRecord> result;
     while (q.executeStep()) {
         HistoryRecord r;
         r.id = q.getColumn("id").getInt();
         r.ticket_id = q.getColumn("ticket_id").getInt();
-        r.patient_id = q.getColumn("patient_id").getInt();
+        r.fio = q.getColumn("fio").getString();
+        r.doctor_fio = q.getColumn("doctor_fio").getString();
+        r.speciality = q.getColumn("speciality").getString();
         r.action_time = q.getColumn("action_time").getString();
         r.action_type = q.getColumn("action_type").getString();
         result.push_back(r);
@@ -285,8 +307,8 @@ std::vector<HistoryRecord> Database::listHistory() const {
 
 
 
-// Логирование действий
-void Database::logHistory(int ticket_id, int patient_id, const std::string& action) const {
+// Логирование действий в таблицу history
+void Database::logHistory(int ticket_id, int patient_id, const std::string& action) {
     SQLite::Statement q(db_, "INSERT INTO history (ticket_id, patient_id, action_time, action_type) VALUES (?, ?, datetime('now', 'localtime'), ?)");
     q.bind(1, ticket_id);
     q.bind(2, patient_id);
@@ -298,9 +320,9 @@ void Database::logHistory(int ticket_id, int patient_id, const std::string& acti
 
 // Инициализация схемы БД
 void Database::initSchema() {
-        db_.exec("PRAGMA foreign_keys = ON");
+    db_.exec("PRAGMA foreign_keys = ON");
 
-        db_.exec(R"SQL(
+    db_.exec(R"SQL(
     CREATE TABLE IF NOT EXISTS "doctors" (
 	    "id" INTEGER PRIMARY KEY,
 	    "fio"	TEXT NOT NULL,
@@ -310,7 +332,7 @@ void Database::initSchema() {
     )
     )SQL");
 
-        db_.exec(R"SQL(
+    db_.exec(R"SQL(
     CREATE TABLE IF NOT EXISTS "patients" (
 	    "id" INTEGER PRIMARY KEY,
 	    "fio"	TEXT NOT NULL,
@@ -318,7 +340,7 @@ void Database::initSchema() {
     )
     )SQL");
 
-        db_.exec(R"SQL(
+    db_.exec(R"SQL(
     CREATE TABLE IF NOT EXISTS "tickets" (
 	    "id" INTEGER PRIMARY KEY,
 	    "doctor_id"	INTEGER NOT NULL,
@@ -331,7 +353,7 @@ void Database::initSchema() {
     )
     )SQL");
 
-        db_.exec(R"SQL(
+    db_.exec(R"SQL(
     CREATE TABLE IF NOT EXISTS "history" (
 	    "id" INTEGER PRIMARY KEY,
 	    "ticket_id"	INTEGER NOT NULL,
@@ -346,8 +368,8 @@ void Database::initSchema() {
 
 
 
-// Сборка объекта Ticket из текущей строки выборки
-Ticket Database::ticketFromRow(SQLite::Statement& q) {
+// Сборка обычного Ticket из текущей строки выборки для бизнес-логики
+Ticket Database::ticketFromRow(SQLite::Statement& q) const {
     std::optional<int> patientId;
     if (!q.getColumn("patient_id").isNull()) {
         patientId = q.getColumn("patient_id").getInt();
@@ -359,4 +381,22 @@ Ticket Database::ticketFromRow(SQLite::Statement& q) {
         patientId,
         q.getColumn("id").getInt()
     );
+}
+
+
+
+// Сборка TicketView (с ФИО врача/пациента) из строки JOIN-запроса
+TicketView Database::ticketViewFromRow(SQLite::Statement& q) const {
+    TicketView v;
+    v.id = q.getColumn("id").getInt();
+    v.doctorId = q.getColumn("doctor_id").getInt();
+    v.doctorFio = q.getColumn("doctor_fio").getString();
+    v.speciality = q.getColumn("speciality").getString();
+    v.date = q.getColumn("date").getString();
+    v.time = q.getColumn("time").getString();
+    if (!q.getColumn("patient_id").isNull()) {
+        v.patientId = q.getColumn("patient_id").getInt();
+        v.patientFio = q.getColumn("patient_fio").getString();
+    }
+    return v;
 }
